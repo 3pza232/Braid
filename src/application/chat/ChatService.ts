@@ -672,14 +672,17 @@ export class ChatService implements ChatApi {
     config: ResolvedConfig,
     startedAt: number,
     /**
-     * 续写起点：这条消息**已经定稿的段**
+     * 续写起点：这条消息**已经定稿的段**，以及**已经花掉的用量**
      *
      * 只有「每轮询问」会用（用户点「继续写」时）：那条消息已经写了几轮、
      * 停在半途，重新开一次轮次循环必须让模型先看到已经写出来的部分 ——
      * 否则它会从头再写一遍。段本身就是"已收工的轮次"的记录，交给它最准确：
      * 拼出来的请求与上一轮**逐字节一致**，前缀缓存也照旧命中。
+     *
+     * `usage` 一并交回的理由见下面 `usage` 变量的声明：那条路径是**往同一条
+     * 消息上追加**，而定稿会覆盖这条消息的用量 —— 不带过来就把前面几轮吃掉了。
      */
-    seed?: { segments: readonly MessageSegment[] },
+    seed?: { segments: readonly MessageSegment[]; usage?: TokenUsage },
   ): Promise<void> {
     const systemPrompt = resolveMacros(config.systemPrompt, {
       ...config.variables,
@@ -744,7 +747,18 @@ export class ChatService implements ChatApi {
 
     let text = '';
     let reasoning = '';
-    let usage: TokenUsage | undefined;
+    /*
+     * 用量**从种子起算**
+     *
+     * 定稿时写回这条消息的 usage 是**覆盖**（见 `finalizeStream`），这对
+     * "发送"与"重新生成"都是对的 —— 那两个入口用的是**新节点**，本来就没有旧用量，
+     * 重新生成更是该只算自己这一版。
+     *
+     * 只有「继续写」不是：它往**同一条消息**上追加，如果从空起算，前面几轮花掉的量
+     * 会在定稿时被一次覆盖吃掉（用户看到的总量偏小）。所以种子里的 usage 接在
+     * 前面当起点，后面每一轮照样 `addUsage` 累加，最终写回的就是整条消息的总量。
+     */
+    let usage: TokenUsage | undefined = seed?.usage;
     let finishReason: FinishReason = 'stop';
     let failure: AppError | null = null;
     let lastFlush = 0;
@@ -1369,9 +1383,13 @@ export class ChatService implements ChatApi {
      * 那些段就是它走到现在为止的全部事实（正文 + 工具往来）。交回去之后，
      * 拼出来的请求与上一轮**逐字节一致**：模型看到的是"我刚写到一半"，
      * 而不是"从头再写一遍"，前缀缓存也照旧命中。
+     *
+     * 用量也一起交回去：这一路径是**往同一条消息上追加**，不带过去的话，
+     * 前面几轮花掉的 token 会在定稿时被覆盖掉（详见 `runStream` 的说明）。
      */
     void this.runStream(conversation.id, node.id, tree, config, Date.now(), {
       segments: node.segments,
+      usage: node.usage,
     });
     return ok(undefined);
   }

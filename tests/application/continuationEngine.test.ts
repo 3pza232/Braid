@@ -35,6 +35,18 @@ const chunkRound = (text: string): ChatStreamEvent[] => [
   { kind: 'done', finishReason: 'stop' },
 ];
 
+/**
+ * 一轮：正文 + **写死的**用量
+ *
+ * 写死是为了让"整条消息的总和"能直接算出来 —— 服务端返回多少就是多少，
+ * 不用跟着本地估算的 token 数走（否则断言只能写成"大概变大"）。
+ */
+const usageRound = (text: string, total: number): ChatStreamEvent[] => [
+  { kind: 'delta', text },
+  { kind: 'usage', usage: { promptTokens: total - 10, completionTokens: 10, totalTokens: total } },
+  { kind: 'done', finishReason: 'stop' },
+];
+
 /** 「每轮询问」档位（下限调得很高，保证"还能再写"始终成立） */
 function askSettings(target = 10_000): AppSettings {
   const settings = continuationSettings(target);
@@ -154,6 +166,36 @@ describe('续写引擎', () => {
     expect(textOf(node)).toBe('第一轮写了一段第二轮又写了一段');
     // 下限还远没到 → 继续挂着邀请，可以一轮轮点下去
     expect(run.service.snapshot().continuableMessageId).toBe(id);
+  });
+
+  it('「继续写」的用量是**整条消息的总和**，不是最后一批（否则数字偏小）', async () => {
+    /*
+     * 【这条钉的是一处真的算错过的地方】
+     * 「继续写」是**新开一次 runStream**（把已写段与已花用量当种子）。
+     * 而定稿是"覆盖这条消息的 usage" —— 对"发送 / 重新生成"（新节点）都对，
+     * 只有这条追加路径会吃掉前面几轮：连点两次之后，显示的就只剩最后一批。
+     */
+    const run = await runConversation({
+      settings: askSettings(),
+      // 三段各自 100 / 200 / 300
+      rounds: [usageRound('第一段', 100), usageRound('第二段', 200), usageRound('第三段', 300)],
+    });
+    const id = run.node?.id ?? null;
+    const usageOf = () =>
+      run.service.snapshot().tree.nodes.find((node) => node.id === id)?.usage ?? null;
+
+    expect(usageOf()?.totalTokens).toBe(100);
+
+    await run.service.continueWriting(id as never);
+    await waitIdle(run.service);
+    expect(usageOf()?.totalTokens).toBe(300); // 100 + 200
+
+    await run.service.continueWriting(id as never);
+    await waitIdle(run.service);
+    // 100 + 200 + 300 —— 覆盖式写法在这里只会留下 300
+    expect(usageOf()?.totalTokens).toBe(600);
+    // 输入/输出也分别是各段之和，不是最后一段的
+    expect(usageOf()?.completionTokens).toBe(30);
   });
 
   it('「每轮询问」：续写时把**已写的内容**发给模型（否则它会从头再写一遍）', async () => {

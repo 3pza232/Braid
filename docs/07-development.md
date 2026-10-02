@@ -193,6 +193,12 @@ npm run build    # verify + 构建
 （温度那个滑块一拖几十次，不能每次都拿整个对话重算一遍用量）。
 用例：`tests/application/contextBudgetRefresh.test.ts`。
 
+**消息上那个 token 数是"整条消息的总和"**（`addUsage` 逐轮累加，悬浮显示输入/输出/思考的分项）。
+定稿写回 usage 是**覆盖**语义 —— 对"发送 / 重新生成"都对（它们用的是新节点，重新生成本就该只算自己），
+但**「继续写」是往同一条消息上追加**，必须把已有用量当种子传进去（`runStream` 的 `seed.usage`），
+否则前面几轮花掉的量会被一次覆盖吃掉、显示偏小。用例：
+`tests/application/continuationEngine.test.ts` 里那条"用量是整条消息的总和"。
+
 ## 打包 exe：两个环境坑（都踩过）
 
 `npm run dist:win` 在本机第一次跑会撞到下面两条，都不是配置问题：
