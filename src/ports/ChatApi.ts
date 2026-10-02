@@ -37,6 +37,14 @@ export interface ChatSnapshot {
    */
   streamingMessageId: MessageId | null;
   /**
+   * 「每轮询问」档位下，那条**正等着用户点头**的回复（`null` = 没有）
+   *
+   * 界面据此在那条消息下面显示「继续写」。它是**当前状态**而不是消息属性，
+   * 因此不落库：重启应用后按钮不会回来 —— 想接着写，打一个「继续」发出去
+   * 同样做得到，而为一个"临时邀请"加一列数据不值得。
+   */
+  continuableMessageId: MessageId | null;
+  /**
    * 内容没能写进本地库（`null` = 没问题）
    *
    * 与命令返回的错误是两件事：那是"这次操作没成功"，这个是"界面看着一切正常，
@@ -127,6 +135,13 @@ export interface ChatApi {
   editMessage(id: MessageId, text: string, mode: EditSubmitMode): Promise<Result<void>>;
   deleteMessage(id: MessageId): Promise<Result<void>>;
   regenerate(id: MessageId): Promise<Result<void>>;
+  /**
+   * 接着往下写（「每轮询问」档位下那个「继续写」按钮走这里）
+   *
+   * 与 `regenerate` 的关键区别：**不新建消息** —— 新内容继续累积在同一条里，
+   * 界面上还是一个气泡连续往下写。
+   */
+  continueWriting(id: MessageId): Promise<Result<void>>;
   /** 在变体组内左右切换（delta = ±1） */
   selectVariant(id: MessageId, delta: number): Promise<Result<void>>;
 

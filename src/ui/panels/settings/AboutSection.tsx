@@ -23,7 +23,7 @@ export function AboutSection() {
         </SettingRow>
         <SettingRow
           label="本地数据库"
-          help="全部数据都在本机。SQLite 跑在独立 Worker 里，数据文件存放在浏览器的 OPFS 中；OPFS 不可用时会降级为内存库（不持久化，会在这里标出）"
+          help="全部数据都在本机；OPFS 不可用时降级为内存库，不会保存"
         >
           <span className={styles.aboutValue}>
             {storage.error
@@ -33,7 +33,7 @@ export function AboutSection() {
         </SettingRow>
         <SettingRow
           label="已存数据"
-          help="直接来自数据库的统计。改一个设置或加一个角色后刷新页面，数字与内容都应该还在 —— 这是判断持久化是否真的生效的依据"
+          help="来自数据库的统计；刷新后数字还在，说明持久化生效"
         >
           <span className={styles.aboutValue}>
             {storage.ready
@@ -45,7 +45,7 @@ export function AboutSection() {
         {storage.ready && !storage.durable ? (
           <SettingRow
             label="⚠️ 数据不会保存"
-            help="OPFS 不可用时引擎会降级成内存库。常见原因：有另一个标签页占着同一个数据库，或浏览器不支持。关掉其它标签页后刷新即可恢复持久化"
+            help="常见原因：有另一个标签页占着同一个数据库。关掉它再刷新即可恢复"
           >
             <span className={styles.aboutValue}>当前是内存库，关掉页面内容即丢失</span>
           </SettingRow>
@@ -53,19 +53,17 @@ export function AboutSection() {
         {storage.recreated ? (
           <SettingRow
             label="⚠️ 检测到数据库被重建"
-            help="本次启动发现数据库是新建的，说明这个地址上以前的存储被清掉了。常见原因：换了端口/地址（见下一行）、浏览器设置了「关闭时清除站点数据」、磁盘空间不足被系统回收、或用了无痕窗口"
+            help="这个地址上以前的存储被清掉了。常见原因：换了端口/地址、浏览器设了「关闭时清除站点数据」、磁盘空间不足被回收、或用了无痕窗口"
           >
             <span className={styles.aboutValue}>上次的数据不在了</span>
           </SettingRow>
         ) : null}
         <SettingRow
           label="持久化存储"
-          help="浏览器只对「安装为应用」或高频访问的站点授予持久化，本地开发地址通常都是未授权 —— 这不影响数据保存，只是磁盘极度紧张时系统可能回收本站数据。真正需要警惕的是下一行的访问地址变了"
+          help="未授权也能正常用；要警惕的是下一行的访问地址变了"
         >
           <span className={styles.aboutValue}>
-            {storage.grantedPersist
-              ? '已授权（不会被自动清理）'
-              : '未授权 · 开发地址属正常，数据仍会保存'}
+            {storage.grantedPersist ? '已授权' : '未授权 · 数据仍会保存，但磁盘紧张时可能被回收'}
           </span>
         </SettingRow>
         <SettingRow
@@ -101,6 +99,9 @@ export function AboutSection() {
           >
             恢复默认
           </button>
+        </SettingRow>
+        <SettingRow label="作者">
+          <span className={styles.aboutValue}>PZA</span>
         </SettingRow>
       </SettingGroup>
     </>

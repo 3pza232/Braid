@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Braid - 本地优先的 AI 对话工作台",
+  "author": "PZA",
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",

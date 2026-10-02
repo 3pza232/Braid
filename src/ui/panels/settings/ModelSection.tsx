@@ -49,7 +49,7 @@ export function ModelSection({ settings, update }: ModelSectionProps) {
     <>
       <SettingGroup
         title="模型与凭据"
-        help="Braid 不预设任何模型提供商，也不替你做选择：模型名与端点都由你自己填写，原样发给服务端"
+        help="模型名与端点都由你自己填，原样发给服务端"
       >
         <ModelProfiles />
 
@@ -84,7 +84,7 @@ export function ModelSection({ settings, update }: ModelSectionProps) {
         </SettingRow>
         <SettingRow
           label="API Key"
-          help="直接填在这里。出于安全考虑默认只驻留内存 —— 不写入磁盘、不进日志；要长期保存请打开下面的「把 Key 保存到本地」（明文）"
+          help="默认只留在内存里；要长期保存请打开下面那项，注意是明文"
         >
           <div className={styles.inlineField}>
             <TextField
@@ -107,7 +107,7 @@ export function ModelSection({ settings, update }: ModelSectionProps) {
         </SettingRow>
         <SettingRow
           label="额外请求体"
-          help="一段 JSON，会合并进请求体。用于透传你的端点特有的参数，例如 {&quot;thinking&quot;: {&quot;type&quot;: &quot;enabled&quot;}}"
+          help="合并进请求体的 JSON，用来传你端点特有的参数"
           stacked
         >
           <TextArea
@@ -132,7 +132,7 @@ export function ModelSection({ settings, update }: ModelSectionProps) {
       <>
         <SettingGroup
           title="余额脚本"
-          help="一段由你自己编写的 JS：请求哪个地址、怎么解析响应，全由你决定 —— 这样 Braid 不需要内置任何厂商的余额接口。脚本里可用 {{apiKey}} 与 {{baseUrl}} 占位，避免把密钥写死在文本里"
+          help="一段你自己写的 JS，决定查哪个地址、怎么解析；可用 {{apiKey}} 与 {{baseUrl}} 占位"
         >
           <SettingRow
             label="脚本内容"
@@ -153,7 +153,7 @@ export function ModelSection({ settings, update }: ModelSectionProps) {
           </SettingRow>
           <SettingRow
             label="示例"
-            help="示例用的是一个常见的余额接口写法，仅作参考；填进去之后请自行改成你自己的地址与解析"
+            help="仅作参考，插入后请改成你自己的地址与解析"
           >
             <div className={styles.inlineField}>
               <button
@@ -174,7 +174,7 @@ export function ModelSection({ settings, update }: ModelSectionProps) {
           </SettingRow>
           <SettingRow
             label="测试脚本"
-            help="立即执行一次脚本并显示结果，用来确认地址、请求头与解析是否写对"
+            help="立刻跑一次，确认地址与解析写对了"
             hint={
               !profileOf(settings).balance.script.trim()
                 ? '未配置'
@@ -239,7 +239,7 @@ export function ModelSection({ settings, update }: ModelSectionProps) {
         <SettingGroup title="安全提示">
           <SettingRow
             label="脚本会以本应用的权限执行"
-            help="余额脚本是你自己粘贴进来的代码，Braid 会直接执行它以拼装请求。请只使用你自己信任的脚本，不要粘贴来源不明的内容。脚本不会联网之外的任何权限被自动授予，但仍请谨慎。"
+            help="脚本会被直接执行，请只粘贴你自己信任的内容"
           >
             <span className={styles.aboutValue}>请自行确认脚本来源</span>
           </SettingRow>

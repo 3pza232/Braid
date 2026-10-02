@@ -68,7 +68,7 @@ activePathIdsOf(links, activeRootChildId)   // 只需要三列指针（跨会话
 
 | 环节 | 位置 | 做什么 |
 |---|---|---|
-| **预算** | `resolveConfig.ts` | `contextBudget = maxContextTokens − reservedForOutput` |
+| **预算** | `resolveConfig.ts` | `contextBudget = maxContextTokens − 单轮输出上限`（= `sampling.maxTokens`，普通对话与续写共享同一份） |
 | **发送前体积处理** | `rules/contextPlan.ts: planContext` | 装得下就不动 → `trim-tool-results`（工具结果压成头 400 / 尾 200 字符）→ 仍超则标 `over-budget` **如实上报** |
 | **压缩（摘要）** | `rules/contextCompression.ts` | `planCompression` 选段：按轮切分、保留最近 `keepRecentTurns`、目标约 `0.15×`、clamp 到 [300, 4000]、低于 800 token 不压 |
 

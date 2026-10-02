@@ -40,6 +40,8 @@ interface ChatState extends ChatSnapshot {
   editMessage: (id: MessageId, text: string, mode: EditSubmitMode) => void;
   deleteMessage: (id: MessageId) => void;
   regenerate: (id: MessageId) => void;
+  /** 接着往下写（「每轮询问」档位下那个按钮） */
+  continueWriting: (id: MessageId) => void;
   selectVariant: (id: MessageId, delta: number) => void;
   /** 手动压缩上下文（顶栏上下文菜单里的按钮） */
   compressContext: () => void;
@@ -106,6 +108,7 @@ export const useChatStore = create<ChatState>((set) => {
     conversation: createEmptyConversation(asConversationId('pending'), 0),
     tree: { nodes: [], activeRootChildId: null },
     streamingMessageId: null,
+    continuableMessageId: null,
     contextNote: null,
     // 装载前当作"还没有落库问题"；服务会用真实状态覆盖它
     persistenceError: null,
@@ -218,6 +221,7 @@ export const useChatStore = create<ChatState>((set) => {
     editMessage: (id, text, mode) => run((api) => api.editMessage(id, text, mode)),
     deleteMessage: (id) => run((api) => api.deleteMessage(id)),
     regenerate: (id) => run((api) => api.regenerate(id)),
+    continueWriting: (id) => run((api) => api.continueWriting(id)),
     selectVariant: (id, delta) => run((api) => api.selectVariant(id, delta)),
   };
 });

@@ -126,8 +126,8 @@ export function ContextMenu() {
                 <div>
                   <dt>预算</dt>
                   <dd>
-                    {formatTokenCount(config.maxContextTokens)} − 预留{' '}
-                    {formatTokenCount(config.reservedForOutput)}
+                    {formatTokenCount(config.maxContextTokens)} − 输出预留{' '}
+                    {formatTokenCount(config.outputReserve)}
                   </dd>
                 </div>
                 <div>

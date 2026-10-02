@@ -1,5 +1,12 @@
 import type { AppSettings, AppSettingsPatch } from '@domain/value-objects/appSettings';
-import { WRITING_MODES, estimatedRounds, softMaxOf, type WritingMode } from '@domain/value-objects/writingMode';
+import { effectiveMaxOutput } from '@domain/value-objects/sampling';
+import {
+  WRITING_MODES,
+  charsPerRoundOf,
+  estimatedRounds,
+  softMaxOf,
+  type WritingMode,
+} from '@domain/value-objects/writingMode';
 import { NumberField, Segmented, SettingGroup, SettingRow, Slider, Switch, TextArea } from '@ui/primitives';
 
 interface WritingSectionProps {
@@ -15,9 +22,12 @@ interface WritingSectionProps {
 /**
  * 续写模式分区
  *
- * 从 `SettingsPanel` 搬出来的第三个分区。原则依旧是**只搬家、不改语义**。
  * `modeTab` 与 `preset` 由面板传进来而不是在这里自己算：档位切换要同时影响
  * 别的地方（面板里还有别的分区读它），状态留在上层才是单一来源。
+ *
+ * 【`help` 只写"这个参数管什么"】早先几条写成了机制说明（"软上限是到此为止的边界，
+ * 避免为凑字数跑飞；停顿检测在连续几轮…"）—— 用户不需要看懂实现，只需要知道
+ * 调大调小会怎样（用户反馈："别写小作文"）。
  */
 export function WritingSection({
   settings,
@@ -26,12 +36,11 @@ export function WritingSection({
   onModeTabChange,
   preset,
 }: WritingSectionProps) {
+  // 每轮能写多少由全局共享的「单轮输出上限」决定（见 设置 → 上下文），档位里不再各配一份
+  const maxOutputTokens = effectiveMaxOutput(settings.sampling);
   return (
-    <SettingGroup
-      title="续写模式"
-      help="字数下限决定 AI 至少写多少字：一轮写不完就自动接着写，直到达标。软上限是「到此为止」的边界，避免为凑字数跑飞；停顿检测在连续几轮没有新增内容时中止，防止原地打转"
-    >
-      <SettingRow label="默认档位" help="新建会话时使用的档位">
+    <SettingGroup title="续写模式" help="写长文时的自动续写规则，按档位分别设置">
+      <SettingRow label="默认档位" help="新建会话时用哪个档位">
         <Segmented
           value={settings.defaultWritingMode}
           onChange={(value) => update({ defaultWritingMode: value })}
@@ -51,7 +60,7 @@ export function WritingSection({
           }))}
         />
       </SettingRow>
-      <SettingRow label="启用该档位" help="关闭后输入框里不再显示这个档位">
+      <SettingRow label="启用该档位" help="关掉后输入框里不再显示这个档位">
         <Switch
           label="启用该档位"
           checked={preset.enabled}
@@ -60,8 +69,8 @@ export function WritingSection({
       </SettingRow>
       <SettingRow
         label="字数下限"
-        help="核心参数：本次生成至少要写到的字数。低于它时 Braid 会自动续写"
-        hint={`按每轮约 4,800 字估算，约需 ${estimatedRounds(preset)} 轮请求`}
+        help="至少要写到的字数，不到就自动接着写"
+        hint={`每轮约 ${charsPerRoundOf(maxOutputTokens).toLocaleString()} 字（受「单轮输出上限」影响），约需 ${estimatedRounds(preset, maxOutputTokens)} 轮请求`}
       >
         <NumberField
           value={preset.minOutputChars}
@@ -75,7 +84,7 @@ export function WritingSection({
       </SettingRow>
       <SettingRow
         label="软上限系数"
-        help={`达到「下限 × 该系数」即停止，防止模型跑飞。当前软上限 = ${softMaxOf(preset).toLocaleString()} 字`}
+        help={`达到「下限 × 系数」就停。当前 = ${softMaxOf(preset).toLocaleString()} 字`}
       >
         <Slider
           value={preset.softMaxRatio}
@@ -86,18 +95,11 @@ export function WritingSection({
           format={(v) => `×${v.toFixed(2)}`}
         />
       </SettingRow>
-      <SettingRow label="单轮输出上限" help="每次请求的 max_tokens，会被模型真实能力自动裁剪">
-        <NumberField
-          value={preset.maxTokensPerRequest}
-          min={1024}
-          max={65536}
-          step={1024}
-          onChange={(value) => update({ writingModes: { [modeTab]: { maxTokensPerRequest: value } } })}
-          suffix="tok"
-          width={150}
-        />
-      </SettingRow>
-      <SettingRow label="续写方式" help="自动续写最省事；关闭即等于普通对话">
+      {/* 「单轮输出上限」不在这里：它移到 设置 → 上下文，短/中/长与普通对话共享同一个值 */}
+      <SettingRow
+        label="续写方式"
+        help="自动：自己接着写。每轮询问：每轮写完停下等你点「继续写」"
+      >
         <Segmented
           value={preset.continuation}
           onChange={(value) => update({ writingModes: { [modeTab]: { continuation: value } } })}
@@ -108,10 +110,7 @@ export function WritingSection({
           ]}
         />
       </SettingRow>
-      <SettingRow
-        label="空转上限"
-        help="连续这么多轮没有产生新内容（模型原地打转）就中止，避免浪费 token"
-      >
+      <SettingRow label="空转上限" help="连续这么多轮没有新内容就中止">
         <NumberField
           value={preset.stallLimit}
           min={1}
@@ -124,7 +123,7 @@ export function WritingSection({
       </SettingRow>
       <SettingRow
         label="续写提示词"
-        help="每轮续写时附带的指令，**短中长共用这一份**。防重复主要靠它，建议保留「不要重复已写内容」。它只发给模型，不会出现在对话里"
+        help="每轮续写时附在请求里的指令，不会出现在对话里"
         stacked
       >
         <TextArea

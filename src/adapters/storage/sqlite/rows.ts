@@ -103,32 +103,6 @@ export function toBool(raw: SqlValue | undefined): boolean {
 }
 
 /**
- * 取三态布尔
- *
- * 与 `toBool` 的区别：**保留 NULL**。
- * `allow_workspace_edit` 的 NULL 语义是"继承全局设置"，
- * 一旦被 `toBool` 压成 false，"全局开关打开"对所有历史会话就都失效了 ——
- * 这类"空值被悄悄填成默认值"的 bug 极难排查，所以单独给一个函数。
- */
-export function toBoolOrNull(raw: SqlValue | undefined): boolean | null {
-  if (raw === null || raw === undefined) return null;
-  if (typeof raw === 'bigint') return raw === 1n ? true : raw === 0n ? false : null;
-  if (typeof raw === 'number') return raw === 1 ? true : raw === 0 ? false : null;
-  if (typeof raw === 'string') {
-    if (raw === '1' || raw === 'true') return true;
-    if (raw === '0' || raw === 'false') return false;
-  }
-  /*
-   * 认不出来的值一律退回 `null`（= 继承），**不猜一个布尔**
-   *
-   * 它在 `allow_workspace_edit` 上是三态：`false` 的语义是"这条会话明确关闭编辑"。
-   * 拿一个坏值（比如被手工改成 7）去猜 `false`，等于让"全局允许编辑"对这条会话静默失效 ——
-   * 用户会觉得"这个会话怎么不让 AI 改文件"，而原因在数据里，界面上一无所知。
-   */
-  return null;
-}
-
-/**
  * 取可空数字
  *
  * 与 `toInt` 的区别：**保留 null**。

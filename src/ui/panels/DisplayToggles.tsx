@@ -17,10 +17,7 @@ export function DisplayToggles() {
 
   return (
     <SettingGroup title="消息显示（全局）" help="与「设置 → 消息信息栏」是同一份配置">
-      <SettingRow
-        label="显示思考过程"
-        help="推理模型会在正文上方给出可折叠的思考链路。关掉只是不展示，内容仍会保存，随时能打开回看"
-      >
+      <SettingRow label="显示思考过程" help="推理模型的可折叠思考链路；关掉只是不显示">
         <Switch
           label="显示思考过程"
           checked={display.showReasoning}
@@ -30,7 +27,7 @@ export function DisplayToggles() {
 
       <SettingRow
         label="思考过程默认展开"
-        help="关（默认）：思考时展开、一出正文就自动折叠。开：一直展开，不自动折叠"
+        help="开：一直展开。关：一出正文就自动折叠"
       >
         <Switch
           label="思考过程默认展开"

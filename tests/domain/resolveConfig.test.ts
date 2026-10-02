@@ -249,11 +249,15 @@ describe('续写引擎的唯一输入源（档位细节在这里解析完，引�
     }
   });
 
-  it('maxTokensPerRequest / stallLimit 一并带出来自同一档位', () => {
+  it('stallLimit 来自该档位；「单轮输出上限」与档位无关，是全局共享的采样参数', () => {
     const resolved = resolveConfig(settingsWith(), conv({ writingMode: 'long' }));
     const preset = DEFAULT_APP_SETTINGS.writingModes.long;
-    expect(resolved.maxTokensPerRequest).toBe(preset.maxTokensPerRequest);
     expect(resolved.stallLimit).toBe(preset.stallLimit);
+    /*
+     * 它既会变成请求里的 max_tokens，又决定上下文的输出预留 ——
+     * 所以只能有一份（早先档位里另有一个 maxTokensPerRequest，已合并到采样参数）。
+     */
+    expect(resolved.outputReserve).toBe(DEFAULT_APP_SETTINGS.sampling.maxTokens);
   });
 
   it('续写提示词会话可覆盖，否则用全局那一份', () => {
@@ -267,19 +271,18 @@ describe('续写引擎的唯一输入源（档位细节在这里解析完，引�
 });
 
 describe('上下文预算与压缩', () => {
-  it('预算 = 上限 − 输出预留；上限只有全局一层（会话改它没有正当用途）', () => {
+  it('预算 = 上下文长度 − 单轮输出上限；长度只有全局一层（会话改它没有正当用途）', () => {
     const resolved = resolveConfig(
       settingsWith({
-        context: {
-          ...DEFAULT_APP_SETTINGS.context,
-          maxContextTokens: 10_000,
-          reservedForOutput: 2_000,
-        },
+        context: { ...DEFAULT_APP_SETTINGS.context, maxContextTokens: 10_000 },
+        sampling: { ...DEFAULT_APP_SETTINGS.sampling, maxTokens: 2_000 },
       }),
       conv(),
     );
 
     expect(resolved.maxContextTokens).toBe(10_000);
+    // 输出预留就是"要下发的 max_tokens"，不再单独配置
+    expect(resolved.outputReserve).toBe(2_000);
     expect(resolved.contextBudget).toBe(8_000);
   });
 

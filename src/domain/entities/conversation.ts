@@ -22,14 +22,6 @@ export interface Conversation {
   workspaceRoot: string | null;
 
   /**
-   * 本会话是否允许 AI 编辑工作区文件：`null` = 继承全局设置
-   *
-   * 用 `null` 而不是 `false` 表示"没表态"：否则全局开关打开时，
-   * 所有会话都会因为自己是 `false` 而不生效。
-   */
-  allowWorkspaceEdit: boolean | null;
-
-  /**
    * 角色实例（创建会话时从角色预设快照下来，之后只读）
    *
    * 会话**不直接引用**角色预设，因为那样"改一次角色会串改所有历史对话"。
@@ -139,7 +131,6 @@ export function createEmptyConversation(
     id,
     title: DEFAULT_CONVERSATION_TITLE,
     workspaceRoot: null,
-    allowWorkspaceEdit: null,
     roleInstance: null,
     roleId: null,
     modelProfileId: null,

@@ -34,8 +34,9 @@ import {
 import { conversationToMarkdown } from '@domain/rules/conversationMarkdown';
 
 import type { ResolvedConfig } from '@domain/rules/resolveConfig';
+import type { AppSettings } from '@domain/value-objects/appSettings';
 import { activeSummaryOf } from '@domain/value-objects/contextSummary';
-import type { SamplingParams } from '@domain/value-objects/sampling';
+import { effectiveMaxOutput } from '@domain/value-objects/sampling';
 import type { TokenUsage } from '@domain/value-objects/usage';
 import { addUsage } from '@domain/value-objects/usage';
 import {
@@ -178,6 +179,16 @@ export class ChatService implements ChatApi {
   private abortController: AbortController | null = null;
 
   /**
+   * 「每轮询问」档位下，那条**正在等用户点头**的回复
+   *
+   * 界面据此长出一个「继续写」按钮。刻意存成"当前状态"而不是消息上的字段：
+   * 它表达的是"现在轮到你决定了"，不是"这条消息曾经怎样"—— 后者要写进库就得迁移，
+   * 而它对解释历史毫无用处（重开应用后想接着写，打一个「继续」发出去同样做得到）。
+   * 代价如实说明：应用重启后这个按钮不会回来。
+   */
+  private continuableId: MessageId | null = null;
+
+  /**
    * 每个会话「上一次请求的 prompt 序列化结果」
    *
    * 只用于缓存命中估算（服务端没给缓存字段时的兜底），因此**不持久化**：
@@ -217,6 +228,25 @@ export class ChatService implements ChatApi {
       commit: (conversationId, next, patch) => this.commit(conversationId, next, patch),
       emit: () => this.emit(),
     });
+
+    /*
+     * 设置变了 → 重新提交一次快照
+     *
+     * 【为什么需要这一条】顶栏那条进度条的预算 = 上下文长度 − 单轮输出上限，两个都是设置项。
+     * 快照里的上下文状态**每次现算**（`contextManager.status()` 会重新解析设置），
+     * 但快照本身只在发送、切换会话、压缩这些时机才被提交 —— 于是用户改完「单轮输出上限」，
+     * 进度条要等到下次发送才动，看起来就是"改了没反应"（真实反馈）。
+     *
+     * 只看**影响预算的两个字段**：温度之类的滑块一拖会触发几十次更新，
+     * 每次拿整个对话重算一遍用量是没有必要的开销（长对话上尤其明显）。
+     */
+    let budgetKey = budgetKeyOf(this.settings.get());
+    this.settings.subscribe((next) => {
+      const key = budgetKeyOf(next);
+      if (key === budgetKey) return;
+      budgetKey = key;
+      this.emit();
+    });
   }
 
   /* ────────────────────────── 读取 ────────────────────────── */
@@ -228,6 +258,7 @@ export class ChatService implements ChatApi {
       conversation: this.getActiveConversation(),
       tree: this.getActiveTree(),
       streamingMessageId: this.streamingId,
+      continuableMessageId: this.continuableId,
       contextNote: this.contextNote,
       context: this.context.status(),
       compressing: this.compressing,
@@ -640,6 +671,15 @@ export class ChatService implements ChatApi {
     treeAtSend: TreeState,
     config: ResolvedConfig,
     startedAt: number,
+    /**
+     * 续写起点：这条消息**已经定稿的段**
+     *
+     * 只有「每轮询问」会用（用户点「继续写」时）：那条消息已经写了几轮、
+     * 停在半途，重新开一次轮次循环必须让模型先看到已经写出来的部分 ——
+     * 否则它会从头再写一遍。段本身就是"已收工的轮次"的记录，交给它最准确：
+     * 拼出来的请求与上一轮**逐字节一致**，前缀缓存也照旧命中。
+     */
+    seed?: { segments: readonly MessageSegment[] },
   ): Promise<void> {
     const systemPrompt = resolveMacros(config.systemPrompt, {
       ...config.variables,
@@ -688,13 +728,19 @@ export class ChatService implements ChatApi {
     this.abortController = controller;
     this.streamingId = messageId;
     this.streamingConversationId = conversationId;
+    /*
+     * 新一轮开始 → 上一条"等你继续"的邀请作废
+     *
+     * 用户已经开始处理别的事了，那个按钮留着只会让他怀疑"到底哪条在等我"。
+     */
+    this.continuableId = null;
     // 交接：从这里开始由 `streamingId` 负责"有人在生成"，占位可以放下了
     this.replyInFlight = false;
     this.emit();
 
     const specs = this.tools.specs();
     /** 已收工的轮次留下的段：正文 + 工具调用 + 工具结果。顺序即事实，只追加不改写 */
-    const settled: MessageSegment[] = [];
+    const settled: MessageSegment[] = seed ? [...seed.segments] : [];
 
     let text = '';
     let reasoning = '';
@@ -707,6 +753,8 @@ export class ChatService implements ChatApi {
     let hitContinuationLimit = false;
     /** 续写中途上下文到顶，主动收在上一轮（见轮次循环里的判断） */
     let hitContextLimit = false;
+    /** 「每轮询问」：这是一次"停下来征求意见"，不是写完了（见下面判定处的说明） */
+    let awaitingContinue = false;
 
     /*
      * ── 续写引擎（M2）──
@@ -727,19 +775,27 @@ export class ChatService implements ChatApi {
      */
     const continuationActive =
       config.continuation !== 'off' && config.writingMode !== 'chat' && config.minOutputChars > 0;
+    /*
+     * 「每轮询问」：该续写**但不由它自己决定**
+     *
+     * 这一档此前是空转的 —— 界面给了三个选项，而 `continuationActive` 只区分
+     * "是不是 off"，于是"每轮询问"与"自动续写"跑的是同一段逻辑，
+     * 用户设了也看不出区别（真实反馈：`每轮询问` 没有效果）。
+     * 现在它在这里分开：判定说"还能再写一轮"时，停下来把决定权交回用户。
+     */
+    const askEachRound = continuationActive && config.continuation === 'ask';
     const targetChars = config.minOutputChars;
     const softMaxChars = config.softMaxChars;
     const stallLimit = Math.max(1, config.stallLimit);
 
     /*
-     * 续写模式下每次请求的 max_tokens 用**档位里配的那个**
+     * 续写轮与普通对话用**同一组采样参数**
      *
-     * 这是 `maxTokensPerRequest` 存在的意义：它决定"每轮最多写多少"，
-     * 与全局采样参数里的 max_tokens 是两回事（那个是普通对话用的）。
+     * 早先续写有一个档位专属的 `maxTokensPerRequest`，与采样里的 `max_tokens` 并存 ——
+     * 同一个"一次最多写多少"要在两处填，用户还得猜哪个在生效（真实反馈）。
+     * 现在统一成「单轮输出上限」= `sampling.maxTokens`，界面在 设置 → 上下文，
+     * 普通对话与短/中/长三个档位共享它。
      */
-    const requestParams: SamplingParams = continuationActive
-      ? { ...config.params, maxTokens: config.maxTokensPerRequest }
-      : config.params;
 
     /** 已累计的正文（含已固化轮次）。思考过程不算字数 —— 用户要的是正文 */
     const charsSoFar = (): number => {
@@ -822,7 +878,7 @@ export class ChatService implements ChatApi {
           round,
           continuationActive,
           continuationPrompt: config.continuationPrompt,
-          params: requestParams,
+          params: config.params,
           tools: specs,
           contextBudget: config.contextBudget,
           // 连接信息来自**解析后的模型配置**（会话 → 角色 → 全局当前），
@@ -967,6 +1023,21 @@ export class ChatService implements ChatApi {
         if (decision.reason === 'round-limit') hitContinuationLimit = true;
         break;
       }
+
+      /*
+       * 「每轮询问」：到此为止，等用户点一次头
+       *
+       * 判定说"还能再写一轮"，但这一档把决定权交回用户 —— 界面会在这条消息下
+       * 长出一个「继续写」按钮（见快照的 `continuableMessageId`）。
+       *
+       * 这里**不固化本轮**：用户可能就此打住，而收尾逻辑本来就会把这轮产出
+       * 正常写进段落（`finalizeStream` 是唯一出口），所以"停下来"不会丢内容，
+       * 也不会让这条消息看起来像"写了一半崩了"。
+       */
+      if (askEachRound) {
+        awaitingContinue = true;
+        break;
+      }
       continuationRounds += 1;
 
       /*
@@ -1005,6 +1076,12 @@ export class ChatService implements ChatApi {
     this.abortController = null;
     this.streamingId = null;
     this.streamingConversationId = null;
+    /*
+     * 挂上"等你继续"（只有真的停在"还能再写一轮"时才挂）
+     *
+     * 中止的不算：用户刚按了停止，再问一句"要不要继续"是反着来的。
+     */
+    this.continuableId = awaitingContinue && !aborted ? messageId : null;
 
     await this.finalizeStream({
       conversationId,
@@ -1211,6 +1288,13 @@ export class ChatService implements ChatApi {
      * （语义与理由见 `withNodeRemoved`）。
      */
     const conversation = this.getActiveConversation();
+    /*
+     * 删掉的正好是"等你继续"的那条 → 邀请一并作废
+     *
+     * 不清的话界面上会留着一个按钮指向不存在的消息（点了没反应），
+     * 而那看起来完全像个 bug。
+     */
+    if (this.continuableId === id) this.continuableId = null;
     return this.commit(
       conversation.id,
       withNodeRemoved(this.getActiveTree(), id, Date.now()),
@@ -1255,6 +1339,40 @@ export class ChatService implements ChatApi {
     if (!committed.ok) return committed;
 
     void this.runStream(conversation.id, regenerated.id, next, config, Date.now());
+    return ok(undefined);
+  }
+
+  async continueWriting(id: MessageId): Promise<Result<void>> {
+    return this.exclusiveReply(() => this.continueNow(id));
+  }
+
+  /**
+   * `continueWriting` 的实际内容；并发占位由 `continueWriting` 负责
+   *
+   * 只服务「每轮询问」那一档：用户看完这一轮，点了「继续写」。
+   *
+   * 与 `regenerate` 的关键区别是**不新建消息** —— 接着往同一条里写。
+   * 新建的话"一个气泡连续写"的观感就断了，用户还会莫名多出一条半截回复。
+   */
+  private async continueNow(id: MessageId): Promise<Result<void>> {
+    // 与 regenerate 同一条纪律：它也要发请求，就得先过上下文闸门（可能触发压缩）
+    const ready = await this.context.prepare('');
+    if (!ready.ok) return ready;
+
+    const { conversation, tree, config } = ready.data;
+    const node = tree.nodes.find((item) => item.id === id);
+    if (!node || node.role !== 'assistant') return ok(undefined);
+
+    /*
+     * 把这条消息**已有的段**交回去当"已定稿的轮次"
+     *
+     * 那些段就是它走到现在为止的全部事实（正文 + 工具往来）。交回去之后，
+     * 拼出来的请求与上一轮**逐字节一致**：模型看到的是"我刚写到一半"，
+     * 而不是"从头再写一遍"，前缀缓存也照旧命中。
+     */
+    void this.runStream(conversation.id, node.id, tree, config, Date.now(), {
+      segments: node.segments,
+    });
     return ok(undefined);
   }
 
@@ -1450,6 +1568,16 @@ export class ChatService implements ChatApi {
     const snapshot = this.snapshot();
     for (const listener of this.listeners) listener(snapshot);
   }
+}
+
+/**
+ * 影响上下文预算的那两个设置项（见构造函数里的订阅）
+ *
+ * 拼成一个字符串比较：数值型字段之间用分隔符隔开，避免 "1000" + "8192" 与
+ * "10008" + "192" 撞成同一个键（这种错只有在某天真的撞上时才会被发现）。
+ */
+function budgetKeyOf(settings: AppSettings): string {
+  return `${settings.context.maxContextTokens}|${effectiveMaxOutput(settings.sampling)}`;
 }
 
 

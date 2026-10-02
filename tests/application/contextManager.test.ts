@@ -62,11 +62,15 @@ function setup(options: Setup = {}) {
   settings.context = {
     ...settings.context,
     maxContextTokens: options.budget ?? 100_000,
-    reservedForOutput: 0,
     keepRecentMessages: options.keepRecent ?? 2,
     compressAt: 0.5,
     compression: options.compression ?? 'off',
   };
+  /*
+   * 预算 = 上下文长度 − 单轮输出上限（`sampling.maxTokens`），所以这里把它设成 0，
+   * 让上面那个 `budget` 就是**实际可用预算** —— 下面各条断言才能直接照着数字读。
+   */
+  settings.sampling = { ...settings.sampling, maxTokens: 0 };
 
   const conversation = createEmptyConversation(asConversationId('conv-1'), 0, { title: '测试会话' });
   let tree = buildTree(options.nodes ?? 8);

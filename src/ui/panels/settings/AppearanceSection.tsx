@@ -19,7 +19,7 @@ export function AppearanceSection({ settings, update }: AppearanceSectionProps) 
       <SettingGroup title="外观">
         <SettingRow
           label="主题"
-          help={`共 ${themes.length + 1} 项（含跟随系统）。加自己的主题：在项目根目录 themes/ 里放一个 json 文件，extends 指向 braid.light 或 braid.dark，只写要改的颜色即可，重启后自动识别`}
+          help={`共 ${themes.length + 1} 项，含跟随系统。自定义主题：往 themes/ 放一个 json，只写要改的颜色`}
         >
           <Dropdown
             value={preference}

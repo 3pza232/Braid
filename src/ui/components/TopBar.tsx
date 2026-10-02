@@ -109,7 +109,7 @@ export function TopBar() {
   const workspaceHint = !workspace.supported
     ? (workspace.unsupportedReason ?? '当前环境不支持访问本地目录')
     : workspace.root === null
-      ? '点击选择一个本地目录作为本会话的工作区\n选好后 AI 可以读取其中的文件；编辑需要另外打开开关'
+      ? '点击选择一个本地目录作为本会话的工作区\n选好后 AI 可以在里面读写'
       : workspaceNeedsGrant
         ? `工作区：${workspace.root.label}\n浏览器重启后需要你点一下重新授权`
         : `工作区：${workspace.root.label}\n点击可更换目录。AI 文件工具只能访问这个目录内的内容`;
@@ -228,7 +228,7 @@ export function TopBar() {
         换机器、清浏览器之前要能一眼找到，而不是翻三层菜单。
       */}
       <IconButton
-        label={exporting ? '正在导出…' : '导出全部数据（JSON 备份）'}
+        label={exporting ? '正在导出…' : '导出全部数据'}
         size={30}
         disabled={exporting}
         onClick={handleExport}

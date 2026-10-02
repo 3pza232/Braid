@@ -1,42 +1,33 @@
 import { appError, err, ok, type Result } from '@shared/result';
 import { normalizeWorkspaceDir } from '@domain/rules/workspacePath';
-import {
-  resolveWorkspacePermission,
-  type ResolvedWorkspacePermission,
-  type WorkspaceSettings,
-} from '@domain/value-objects/workspace';
 import type { FsEntry, FileSystemPort, HandleState, WorkspaceRef } from '@ports/host/FileSystemPort';
 import type { WorkspaceAlert, WorkspaceApi, WorkspaceSnapshot } from '@ports/WorkspaceApi';
 
 /**
  * 工作区的作用域
  *
- * 服务需要知道"当前这条对话选的是哪个目录、编辑开关怎么样"。
- * 这三件事分别住在**会话**与**设置**里，而服务既不该持有会话仓储，
- * 也不该持有设置服务 —— 那会把"工作区"和"聊天"耦合死。
+ * 服务只需要知道一件事：**当前这条对话选的是哪个目录**。它住在会话里，
+ * 而服务既不该持有会话仓储、也不该持有设置服务 —— 那会把"工作区"和"聊天"耦合死。
  *
- * 所以改用三个取值函数注入：谁装配容器谁负责把它们接起来
- * （组合根知道会话在哪、设置在哪）。这同时让单测可以不启动任何仓储就测完服务。
+ * 所以改用取值函数注入：谁装配容器谁负责接起来（组合根知道会话在哪）。
+ * 这同时让单测可以不启动任何仓储就测完服务。
+ *
+ * 【早先这里有三个函数】还有"会话级覆盖"与"全局默认"两个，服务于一个
+ * 三层开关（全局 / 会话 / 浏览器授权）。那个概念已经删掉了：**选中工作区
+ * 就等于给了这个目录的读写权**（见 `writeFile` 的说明）。
  */
 export interface WorkspaceScope {
   /** 当前会话的工作区令牌（`null` = 未选择） */
   root(): string | null;
-  /** 会话级的"允许编辑"覆盖（`null` = 继承全局） */
-  override(): boolean | null;
-  /** 全局"允许编辑"默认值 */
-  global(): WorkspaceSettings;
   /** 把新令牌写回当前会话（由会话契约完成持久化） */
   setRoot(root: string | null): Promise<void>;
 }
-
-const EMPTY_PERMISSION: ResolvedWorkspacePermission = { allowEdit: false, source: 'global' };
 
 export class WorkspaceService implements WorkspaceApi {
   private loaded = false;
   private root: WorkspaceRef | null = null;
   private handleState: HandleState = 'missing';
   private writeState: HandleState = 'missing';
-  private permission: ResolvedWorkspacePermission = EMPTY_PERMISSION;
   private entries: FsEntry[] = [];
   private error: string | null = null;
 
@@ -58,13 +49,11 @@ export class WorkspaceService implements WorkspaceApi {
       handleState: this.handleState,
       writeState: this.writeState,
       canRead: this.root !== null && this.handleState === 'granted',
-      // 三件事都要成立才叫"能写"：选中目录、浏览器给了写入权、我们的开关开着
+      // 两件事：选中目录 + 浏览器给了写入权（"我们的开关"那第三层已经删掉了）
       canWrite:
         this.root !== null &&
         this.handleState === 'granted' &&
-        this.writeState === 'granted' &&
-        this.permission.allowEdit,
-      permission: this.permission,
+        this.writeState === 'granted',
       supported: this.fs.supported,
       unsupportedReason: this.fs.unsupportedReason,
       entries: this.entries,
@@ -86,19 +75,10 @@ export class WorkspaceService implements WorkspaceApi {
     return () => this.alertListeners.delete(listener);
   }
 
-  /**
-   * 装载（或会话切换后重新装载）
-   *
-   * 权限每次都重新解析而不是缓存：用户可能在设置里刚打开开关，
-   * 缓存住就会出现"明明开了还是不让写"这种最难查的一类 bug。
-   */
+  /** 装载（或会话切换后重新装载） */
   async load(): Promise<Result<WorkspaceSnapshot>> {
     const token = this.scope.root();
     this.loadedRootToken = token;
-    this.permission = resolveWorkspacePermission({
-      global: this.scope.global(),
-      override: this.scope.override(),
-    });
 
     if (!token) {
       this.root = null;
@@ -138,19 +118,8 @@ export class WorkspaceService implements WorkspaceApi {
    * 不加判断就会变成"每输出一个字就重读一遍目录"。
    */
   async syncScope(): Promise<void> {
-    const next = resolveWorkspacePermission({
-      global: this.scope.global(),
-      override: this.scope.override(),
-    });
-    // 权限真的变了才值得通知界面。否则每次调用都 emit 会让整棵树白白重渲染
-    const permissionChanged =
-      next.allowEdit !== this.permission.allowEdit || next.source !== this.permission.source;
-    this.permission = next;
-
-    if (this.scope.root() === this.loadedRootToken) {
-      if (permissionChanged) this.emit();
-      return;
-    }
+    // 令牌没变就什么都不做（这个函数会被高频调用，见上面的说明）
+    if (this.scope.root() === this.loadedRootToken) return;
     await this.load();
   }
 
@@ -158,12 +127,14 @@ export class WorkspaceService implements WorkspaceApi {
     /*
      * 权限**一次要够**
      *
-     * 已经允许编辑时就顺带申请写入权限。这是唯一可行的时机：
-     * 弹目录选择器的这一次点击同时是"用户手势"和"授权弹窗出现的地方"。
-     * 事后再补申请（工具执行到一半）没有手势，只会失败。
+     * 一律申请 `readwrite`。这是唯一可行的时机：弹目录选择器的这一次点击
+     * 同时是"用户手势"和"授权弹窗出现的地方"。事后再补申请
+     * （工具执行到一半）没有手势，只会失败。
+     *
+     * 早先是"开了编辑开关才要写权限"—— 那个开关没了，所以没得选：
+     * 选中目录 = 给该目录读写权（这也是用户唯一能理解的说法）。
      */
-    const mode = this.permission.allowEdit ? 'readwrite' : 'read';
-    const picked = await this.fs.pickDirectory({ mode });
+    const picked = await this.fs.pickDirectory({ mode: 'readwrite' });
     if (!picked.ok) return picked;
     // 用户取消：什么都不改，会话里原来的目录保持不变
     if (picked.data === null) return ok(null);
@@ -222,8 +193,16 @@ export class WorkspaceService implements WorkspaceApi {
     const result = await this.fs.requestWriteAccess(guard.data);
     if (!result.ok) return result;
 
-    this.writeState = result.data;
-    this.commit();
+    /*
+     * 拿到写入权之后**必须把读取状态也重查一遍**（所以这里走 `load()`）
+     *
+     * 浏览器给 `readwrite` 时读权限是一并给到的，而 `handleState` 很可能还停在
+     * 'prompt'（重开应用后就是这样）。早先这里只写 `writeState` 再 commit，
+     * 后果是：顶栏那颗「需授权」一直亮着，用户刚授权完还得再去会话设置里点一次
+     * 「重新授权」—— 他会觉得"我刚点过，怎么没用"。
+     * `load()` 会把两个状态、目录列表一起刷新，代价只是一次探测。
+     */
+    await this.load();
     return result;
   }
 
@@ -302,16 +281,14 @@ export class WorkspaceService implements WorkspaceApi {
       return err(appError('FS_PATH_DENIED', message));
     }
 
-    if (!this.permission.allowEdit) {
-      const where = this.permission.source === 'global' ? '全局设置' : '本会话设置';
-      const message = `编辑工作区文件未获授权：请在${where}里打开「允许编辑工作区文件」后再试`;
-      this.raise('FS_EDIT_DENIED', message);
-      return err(
-        appError('FS_EDIT_DENIED', message, {
-          detail: { path, permissionSource: this.permission.source },
-        }),
-      );
-    }
+    /*
+     * 这里曾经还有一道"编辑开关"的门（全局默认 + 会话覆盖）
+     *
+     * 那道门已经去掉：**选中工作区就等于给了这个目录的读写权** ——
+     * 用户点开选择器、选中目录，本身就是同意（浏览器那次授权弹窗也是同一个手势）。
+     * 三层开关（全局 / 会话 / 浏览器）只要有一层没对上，用户看到的就是
+     * "我明明选了目录还是写不了"，而界面上看不出是哪一层的问题。
+     */
 
     /*
      * 第二道门：**浏览器的写入授权**

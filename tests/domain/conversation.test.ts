@@ -13,9 +13,8 @@ describe('createEmptyConversation', () => {
 
     expect(conversation.title).toBe(DEFAULT_CONVERSATION_TITLE);
     expect(conversation.writingMode).toBe('chat');
-    // 三个"未表态"字段必须是 null，而不是 false / 空串：
+    // "未表态"字段必须是 null，而不是 false / 空串：
     // 它们承担"继承上一层"的语义，被填成默认值会让全局设置对所有历史会话失效
-    expect(conversation.allowWorkspaceEdit).toBeNull();
     expect(conversation.modelProfileId).toBeNull();
     expect(conversation.minOutputChars).toBeNull();
     expect(conversation.workspaceRoot).toBeNull();
@@ -28,12 +27,10 @@ describe('createEmptyConversation', () => {
     const conversation = createEmptyConversation(asConversationId('c1'), 100, {
       title: '我的小说',
       writingMode: 'long',
-      allowWorkspaceEdit: true,
     });
 
     expect(conversation.title).toBe('我的小说');
     expect(conversation.writingMode).toBe('long');
-    expect(conversation.allowWorkspaceEdit).toBe(true);
   });
 });
 

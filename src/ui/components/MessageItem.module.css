@@ -250,6 +250,66 @@
   border: 1px solid var(--color-status-danger);
 }
 
+/*
+ * 删除按钮：危险色
+ *
+ * 这一排动作里只有它不可撤销（编辑能撤回、重新生成能换一版、复制无害），
+ * 所以它必须与其他按钮**一眼可分**，而不是"长得一样、只有位置不同"。
+ *
+ * 用 `.actions .danger` 而不是单个 `.danger`：`.iconButton` 的基色也是单类选择器，
+ * 谁赢取决于两个 CSS Module 的插入顺序 —— 那种"靠 import 顺序生效"的样式
+ * 迟早会在一次无关的调整里失效。两级选择器把优先级锁死。
+ *
+ * 常驻危险色不会让界面变吵：这一整排只在悬停/聚焦时才显形（见 .actions）。
+ */
+.actions .danger {
+  color: var(--color-status-danger);
+}
+
+.actions .danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-status-danger) 16%, transparent);
+  color: var(--color-status-danger);
+}
+
+/*
+ * 「继续写」（「每轮询问」档位）
+ *
+ * 常显、带强调色：它是这一屏里唯一需要用户拿主意的地方，藏进鼠标悬停才出现的那排
+ * 图标里就等于没做。但**不填实色** —— 填实会跟发送键争"最主要的那个按钮"，
+ * 而这里的语义是"要不要再来一轮"，不是"提交"。
+ */
+.continueRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.continueBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-accent-default);
+  border-radius: var(--radius-md);
+  background: var(--color-accent-subtle);
+  color: var(--color-accent-default);
+  font-size: var(--text-xs);
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.continueBtn:hover {
+  background: var(--color-accent-default);
+  color: var(--color-accent-on-accent);
+}
+
+.continueHint {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+}
+
 .message[data-status='aborted'] .bubble {
   border: 1px dashed var(--color-border-strong);
 }

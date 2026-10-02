@@ -4,7 +4,6 @@ import { messageFromRow } from '@adapters/storage/sqlite/messageRows';
 import {
   parseJson,
   roleFromRow,
-  toBoolOrNull,
   toInt,
   toNumOrNull,
   toText,
@@ -55,15 +54,6 @@ describe('基础取值的容错', () => {
     expect(toNumOrNull('abc')).toBeNull();
   });
 
-  it('toBoolOrNull：三态都不塌陷', () => {
-    expect(toBoolOrNull(null)).toBeNull();
-    expect(toBoolOrNull(1)).toBe(true);
-    expect(toBoolOrNull(0)).toBe(false);
-    expect(toBoolOrNull('true')).toBe(true);
-    expect(toBoolOrNull('false')).toBe(false);
-    // 认不出来的值退回"继承"，而不是猜一个布尔
-    expect(toBoolOrNull(7)).toBeNull();
-  });
 });
 
 describe('messageFromRow', () => {
@@ -139,12 +129,6 @@ describe('conversationFromRow', () => {
     expect(
       conversationFromRow({ forked_from_json: '{"conversationId":"c","messageId":"m"}' }).forkedFrom,
     ).toEqual({ conversationId: 'c', messageId: 'm' });
-  });
-
-  it('allow_workspace_edit 的三态：null 必须留下（它是"继承全局"的载体）', () => {
-    expect(conversationFromRow({ allow_workspace_edit: null }).allowWorkspaceEdit).toBeNull();
-    expect(conversationFromRow({ allow_workspace_edit: 1 }).allowWorkspaceEdit).toBe(true);
-    expect(conversationFromRow({ allow_workspace_edit: 0 }).allowWorkspaceEdit).toBe(false);
   });
 
   it('坏掉的 params_json：读成空参数，而不是一个数字（那会让下游到处读到 undefined）', () => {

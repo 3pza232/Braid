@@ -13,7 +13,7 @@ export function IdentitySection({ settings, update }: IdentitySectionProps) {
     <>
       <SettingGroup
         title="身份"
-        help="AI 叫什么、你怎么称呼它、你叫什么、以及双方的头像。这些值会替换提示词里的 {{char}} 与 {{user}} 宏"
+        help="AI 与你的名字、头像；会替换预设词里的 {{char}} 与 {{user}}"
       >
         <SettingRow label="AI 的名字" help="宏 {{char}} 会替换成这个名字">
           <TextField

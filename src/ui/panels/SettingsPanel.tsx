@@ -4,6 +4,7 @@ import type { WritingMode } from '@domain/value-objects/writingMode';
 import { IconClose } from '@ui/components/Icons';
 import { useSettingsStore } from '@ui/stores/settingsStore';
 import { useModalFocus } from '@ui/hooks/useModalFocus';
+import { useOverlayDismiss } from '@ui/hooks/useOverlayDismiss';
 import { useUiStore } from '@ui/stores/uiStore';
 import { AboutSection } from './settings/AboutSection';
 import { AppearanceSection } from './settings/AppearanceSection';
@@ -13,7 +14,6 @@ import { DisplaySection } from './settings/DisplaySection';
 import { IdentitySection } from './settings/IdentitySection';
 import { ModelSection } from './settings/ModelSection';
 import { SamplingSection } from './settings/SamplingSection';
-import { WorkspaceSection } from './settings/WorkspaceSection';
 import { WritingSection } from './settings/WritingSection';
 import styles from './SettingsPanel.module.css';
 
@@ -26,9 +26,14 @@ type SectionId =
   | 'display'
   | 'appearance'
   | 'composer'
-  | 'workspace'
   | 'about';
 
+/**
+ * 分区清单
+ *
+ * 【为什么没有「工作区」】工作区是**每个会话各自选的目录**，不是一个全局默认值 ——
+ * 放到全局设置里只会让人问"那到底是哪个目录"。它的唯一入口在会话设置与顶栏。
+ */
 const SECTIONS: Array<{ id: SectionId; label: string }> = [
   { id: 'identity', label: '身份' },
   { id: 'model', label: '模型与凭据' },
@@ -38,7 +43,6 @@ const SECTIONS: Array<{ id: SectionId; label: string }> = [
   { id: 'display', label: '消息信息栏' },
   { id: 'appearance', label: '外观' },
   { id: 'composer', label: '输入与快捷键' },
-  { id: 'workspace', label: '工作区' },
   { id: 'about', label: '关于' },
 ];
 
@@ -79,9 +83,11 @@ export function SettingsPanel() {
   const preset = settings.writingModes[modeTab];
 
   const modalFocus = useModalFocus<HTMLElement>();
+  // 点遮罩关闭：**按下与松手都要在遮罩上**（拖出去松手不算，见 useOverlayDismiss）
+  const overlayDismiss = useOverlayDismiss(closePanel);
 
   return (
-    <div className={styles.overlay} onClick={closePanel} role="presentation">
+    <div className={styles.overlay} {...overlayDismiss} role="presentation">
       <section
         ref={modalFocus.ref}
         className={styles.panel}
@@ -91,7 +97,6 @@ export function SettingsPanel() {
         // tabIndex=-1：允许"没有可聚焦元素时"把焦点收到面板本身，但不进 Tab 序列
         tabIndex={-1}
         onKeyDown={modalFocus.onKeyDown}
-        onClick={(e) => e.stopPropagation()}
       >
         <header className={styles.header}>
           <h2 className={styles.title}>设置</h2>
@@ -160,7 +165,6 @@ export function SettingsPanel() {
             {section === 'composer' ? <ComposerSection settings={settings} update={update} /> : null}
 
             {/* ── 工作区 ── */}
-            {section === 'workspace' ? <WorkspaceSection settings={settings} update={update} /> : null}
 
             {/* ── 关于 ── */}
             {section === 'about' ? <AboutSection /> : null}

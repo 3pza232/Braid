@@ -120,11 +120,24 @@ export function NumberField({
     if (clamped !== value) onChange(clamped);
   };
 
+  /**
+   * 用微调箭头走一步
+   *
+   * 与键盘上/下键同一套语义：**立刻生效**（这里没有"打了一半"的中间态），
+   * 但同样要钳进范围 —— 到边界时按钮会置灰，而不是让值越界再被上游拒。
+   */
+  const nudge = (direction: 1 | -1) => {
+    const next = clampNumber(value + direction * step, min, max);
+    if (next === value) return;
+    setDraft(String(next));
+    onChange(next);
+  };
+
   return (
-    <div className={styles.inputWrap} style={{ width }}>
+    <div className={clsx(styles.inputWrap, styles.numberWrap)} style={{ width }}>
       <input
         type="number"
-        className={clsx(styles.input, styles.inputNumber)}
+        className={clsx(styles.input, styles.numberInput)}
         value={draft}
         min={min}
         max={max}
@@ -143,6 +156,28 @@ export function NumberField({
         }}
       />
       {suffix ? <span className={styles.suffix}>{suffix}</span> : null}
+      {/*
+        自绘的上下微调箭头
+
+        原生那两个（`::-webkit-inner-spin-button`）不跟主题，还会与单位文字抢位置 ——
+        这正是"箭头样式没适配"的来源。改用自绘的：颜色走 token、位置固定、悬停才显形。
+      */}
+      <span className={styles.stepper}>
+        <button
+          type="button"
+          className={clsx(styles.stepBtn, styles.stepUp)}
+          aria-label="增加"
+          disabled={max !== undefined && value >= max}
+          onClick={() => nudge(1)}
+        />
+        <button
+          type="button"
+          className={clsx(styles.stepBtn, styles.stepDown)}
+          aria-label="减少"
+          disabled={min !== undefined && value <= min}
+          onClick={() => nudge(-1)}
+        />
+      </span>
     </div>
   );
 }

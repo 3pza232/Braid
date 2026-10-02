@@ -21,7 +21,7 @@
  *   npm run desktop        —— 本地跑打包好的 dist
  *   npx electron . --smoke —— 自检：加载 → 探首屏与 OPFS → 打印结果 → 自行退出（0/1）
  */
-const { app, BrowserWindow, dialog, shell } = require('electron');
+const { app, BrowserWindow, dialog, session, shell } = require('electron');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
@@ -208,6 +208,8 @@ async function smokeTest(window) {
       elements: document.querySelectorAll('*').length,
       firstScreen: document.body.innerText.replace(/\\s+/g, ' ').slice(0, 120),
       opfs: root,
+      // 持久化存储：桌面版靠 main 进程放行 persistent-storage 才拿得到（见下文的检查）
+      persisted: await navigator.storage.persisted().catch(() => null),
       secure: window.isSecureContext,
       // 内联脚本有没有被 CSP 挡掉：它负责在 React 挂载前写上主题标记
       theme: document.documentElement.dataset.theme ?? '',
@@ -260,6 +262,17 @@ async function smokeTest(window) {
   if (probe.elements < 20) problems.push('首屏几乎是空的（React 没挂载或崩了）');
   if (!probe.opfs) problems.push('OPFS 不可用 —— 数据不会落盘（这正是必须避免的那件事）');
   if (!probe.secure) problems.push('不是安全上下文');
+  /*
+   * 持久化存储必须拿到
+   *
+   * 桌面版本该拿到：`installFileSystemPermissions()` 放行了 `persistent-storage`，
+   * 应用启动时也会主动 `navigator.storage.persist()`。拿不到就意味着数据是 best-effort ——
+   * 系统在磁盘紧张时可以把它回收掉。这一条以前没人验过（设置页只会显示"未授权"），
+   * 现在它进了自检：改坏了会当场红。
+   */
+  if (probe.persisted !== true) {
+    problems.push('持久化存储未授权 —— 数据可能被系统回收（persistent-storage 权限没生效）');
+  }
 
   /*
    * CSP 里必须允许 eval：**余额脚本功能就是"执行用户写的 JS"**（`new Function`）。
@@ -282,6 +295,56 @@ async function smokeTest(window) {
   return problems.length === 0;
 }
 
+/*
+ * ── 让「工作区授权」活过"关掉再打开" ──
+ *
+ * 【问题】Chromium 对 File System Access 的授权是**跟着顶层文档走的**：
+ * 最后一个顶层文档关闭或导航离开后不久，那个 origin 的授权就被重置。
+ * 对浏览器这是对的（换个页面就该重问），对桌面应用就成了"每次重开都要重新授权、
+ * 而且顶栏一直亮着「需授权」"。Electron 把这件事交给应用自己决定：实现下面两个 handler。
+ *
+ * 【为什么要两个】Electron 文档明确要求成对实现：多数 Web API 是
+ * **先做 permission check、被拒了才发 permission request**。只实现一个，
+ * 另一条路径仍会落到默认行为上。
+ *
+ * 【`fileSystem` 的两个坑】权限名是**驼峰**（Electron 的权限列表里只有它是这个写法，
+ * 写错大小写就永远匹配不上）；而且它的 `isMainFrame` **永远是 false**
+ *（Chromium 的限制），所以判断不能依赖它。
+ *
+ * 【放行意味着什么 —— 一句实话】放行 `fileSystem` 等于让 `queryPermission` 一直返回
+ * 'granted'，即**浏览器那一层不再是门禁**。对桌面版这是合适的：用户点开目录选择器
+ * 并选中一个目录，本身就是一次明确的授权；而"到底能不能写"始终由 Braid 自己的
+ * 编辑开关说了算（开关没开时，`WorkspaceService.writeFile` 连底层写接口都不会调用）。
+ *
+ * 【其余一律拒】这个应用只用到文件系统、剪贴板与外链，与其把默认从"拒"改成"全放行"，
+ * 不如把用到的列出来。`openExternal` 必须留着：消息里的链接是交给系统浏览器打开的。
+ */
+const ALLOWED_PERMISSIONS = new Set([
+  'fileSystem',
+  /*
+   * `persistent-storage`：让 `navigator.storage.persist()` 能成功
+   *
+   * 浏览器（Chromium）按"是否安装为应用 / 访问频率"之类的启发式决定给不给，
+   * 本地应用一律拿不到 —— 于是设置里的「持久化存储」永远显示"未授权"。
+   * 桌面版没有这个顾虑：数据只在这台机器上，用户也明确希望它别被系统回收。
+   */
+  'persistent-storage',
+  'clipboard-read',
+  'clipboard-sanitized-write',
+  'openExternal',
+]);
+
+function installFileSystemPermissions() {
+  const current = session.defaultSession;
+  if (!current) return;
+  current.setPermissionCheckHandler((_webContents, permission) =>
+    ALLOWED_PERMISSIONS.has(permission),
+  );
+  current.setPermissionRequestHandler((_webContents, permission, callback) =>
+    callback(ALLOWED_PERMISSIONS.has(permission)),
+  );
+}
+
 /** 第二个实例：不起服务、不建窗口，把已有窗口叫到前面来 */
 // 自检模式不抢锁：应用正开着时也要能跑（那时它会去争同一个端口，走下面的报错分支）
 if (!SMOKE && !app.requestSingleInstanceLock()) {
@@ -300,6 +363,8 @@ if (!SMOKE && !app.requestSingleInstanceLock()) {
       app.exit(1);
       return;
     }
+
+    installFileSystemPermissions();
 
     // 先把主题目录准备好：服务要端它，应用启动的第一个请求就会来取
     ensureThemeDirectory();

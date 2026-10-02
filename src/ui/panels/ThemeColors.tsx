@@ -243,7 +243,7 @@ export function ThemeColors() {
                                 {copied === spec.path ? '已复制' : '同步'}
                               </button>
                             </Tooltip>
-                            <Tooltip label={`这一项恢复为主题默认（${fallback}）`}>
+                            <Tooltip label={`恢复为主题默认值：${fallback}`}>
                               <button
                                 type="button"
                                 className={styles.resetRow}
@@ -265,7 +265,7 @@ export function ThemeColors() {
                           data-overridden={isOverridden}
                           value={hex}
                           onChange={(event) => setValue(spec.path, event.target.value)}
-                          aria-label={`${spec.label}（覆盖 ${spec.path}）`}
+                          aria-label={`${spec.label}，当前值覆盖主题默认`}
                         />
                       </div>
                     );

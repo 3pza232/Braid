@@ -4,7 +4,6 @@ import {
   normalizeWorkspaceDir,
   normalizeWorkspacePath,
 } from '@domain/rules/workspacePath';
-import { resolveWorkspacePermission } from '@domain/value-objects/workspace';
 
 const REASONS = ['empty', 'absolute', 'drive', 'escape', 'nul', 'too_deep'] as const;
 
@@ -65,13 +64,8 @@ describe('工作区路径沙箱', () => {
   });
 });
 
-describe('工作区编辑权限解析（会话覆盖 > 全局默认）', () => {
-  it.each([
-    [{ allowEdit: false }, null, false, 'global'],
-    [{ allowEdit: true }, null, true, 'global'],
-    [{ allowEdit: true }, false, false, 'conversation'],
-    [{ allowEdit: false }, true, true, 'conversation'],
-  ] as const)('全局 %j + 覆盖 %j → allowEdit=%s (%s)', (global, override, allowEdit, source) => {
-    expect(resolveWorkspacePermission({ global, override })).toEqual({ allowEdit, source });
-  });
-});
+/*
+ * 这里曾经有一组「编辑权限解析」用例（会话覆盖 > 全局默认）。
+ * 那个概念已经删掉了：**选中工作区 = 给了该目录的读写权**（见 06-workspace.md），
+ * 所以没有"权限解析"可测了 —— 留一组空 case 比删掉更误导。
+ */

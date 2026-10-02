@@ -174,9 +174,24 @@ npm run build    # verify + 构建
 **读回容错补了一轮专项**（写用例时照出来的，都是"库里那一格形状不对"引发）：`tags_json` 是标量时
 整个装载会抛掉（`filter is not a function`）、`role_instance_json` 是数组时界面会在
 `avatar.color` 上抛错、`writing_mode: "epic"` 这类认不出的枚举会原样进领域层、`params_json`/
-`variables_json` 是标量时字段会变成数字、`toBoolOrNull(7)` 会猜成 `false`（让"全局允许编辑"
-对这条会话静默失效）。现在统一走 `parseJsonObject` / `parseJsonArray` 并按清单校验枚举，
-用例钉住（`tests/adapters/storageTolerance.test.ts`），规则写在 [03-storage.md](./03-storage.md)。
+`variables_json` 是标量时字段会变成数字。现在统一走 `parseJsonObject` / `parseJsonArray`
+并按清单校验枚举，用例钉住（`tests/adapters/storageTolerance.test.ts`），
+规则写在 [03-storage.md](./03-storage.md)。
+
+**工作区的三层权限开关已经整个删掉**（迁移 v10 一并删列）：**选中工作区 = 给了该目录的读写权**。
+一个动作能说清的事不要拆成全局默认 + 会话覆盖 + 浏览器授权 —— 三层里任何一层没对上，
+用户看到的都是"我明明选了目录还是写不了"，而界面上看不出是哪一层。
+桌面版的 FSA 授权也已经做成跨重启有效（`electron/main.cjs` 的权限处理）。
+详见 [06-workspace.md](./06-workspace.md)。
+
+**「一次最多写多少」只剩一个字段**：`sampling.maxTokens`（界面叫「单轮输出上限」，
+放在 设置 → 上下文，因为预算 = 上下文长度 − 它）。两处并存的代价是真实的：
+档位里曾有一个 `maxTokensPerRequest`，与采样里的 `max_tokens` 各配一份，
+用户还得猜哪个在生效（真实反馈）。现在普通对话与短/中/长三个档位共享它。
+**改它必须让顶栏进度条立刻更新** —— 快照只在发送/切换会话/压缩时才提交，
+所以 `ChatService` 订阅了设置变化，并且只对"影响预算的两个字段"重算
+（温度那个滑块一拖几十次，不能每次都拿整个对话重算一遍用量）。
+用例：`tests/application/contextBudgetRefresh.test.ts`。
 
 ## 打包 exe：两个环境坑（都踩过）
 
@@ -189,6 +204,19 @@ npm run build    # verify + 构建
   npx electron-builder --win nsis --config.directories.output="$TEMP/braid-pack"
   # 然后把 $TEMP/braid-pack/Braid-<版本>-setup.exe 拷进 release/
   ```
+
+  **连不上 GitHub 时**（打包要下载 NSIS / 签名资源，报 `connect ETIMEDOUT ...:443`）：
+  换个镜像即可，不必改配置 ——
+
+  ```bash
+  # PowerShell
+  $env:ELECTRON_BUILDER_BINARIES_MIRROR = "https://npmmirror.com/mirrors/electron-builder-binaries/"
+  # cmd
+  set ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
+  ```
+
+  另一个坑：打包中途被打断会**占着输出目录**（`EBUSY`）。不要去杀进程
+  （残留的 node/electron 很可能混着编辑器自己的），换个干净输出目录重跑就行。
 - **`trash-failed` / "Some operations were aborted"** —— 本机的 `fs.rm` 被一个"安全删除"垫片
   接管了（通过 `NODE_OPTIONS=--require ...node-language-shim.cjs` 注入），它会拦下打包工具
   清理自己临时目录的动作。给那条命令用干净环境即可：`$env:NODE_OPTIONS=""`（只影响该子进程）。
@@ -250,10 +278,25 @@ npm run build    # verify + 构建
   门禁会拿着旧算法给出**假绿灯**；
 - **树索引按引用缓存**：`domain/rules/messageTree.ts: cachedTreeIndex`。消息树是不可变的，
   所以同一棵树重复查只建一次索引 —— 顶栏用量在流式期约 8 次/秒重算，这不是微优化；
-- **`ChatService` 开始拆分**：上下文（状态 / 发送前的闸门 / 压缩）已搬到
-  `application/chat/contextManager.ts`，用窄接口（取值函数 + 提交 + 通知）注入。
-  **剩下流式编排（`runStream`，约 320 行）与工具循环仍在服务里** ——
-  那是全项目最贵的路径，建议单独一轮、先补它的行为测试再搬。
+- **`ChatService` 的拆分已经告一段落**（不要再往里塞新职责）：上下文 → `contextManager.ts`、
+  请求组装 → `roundRequest.ts`、工具轮 → `toolRound.ts`、续写判定 → `continuation.ts`、
+  收尾判定 → `streamOutcome.ts`，各带独立用例；服务里剩下的主体是
+  **"轮次循环 + 流消费 + 落库时机"** —— 那是一个连贯的状态机，再切只会把时序拆散；
+- **输出上限的天花板是 100 万 token**（`MAX_OUTPUT_TOKENS_CEILING`）：65,536 是好几年前的口径，
+  现在的模型动辄几十万输出（deepseek-flash 给到 384,000），卡在那里用户**连填都填不进去**。
+  与之配套的一条纪律：**Braid 不替用户猜模型能力**（上一条也适用于上下文长度）——
+  界面照实说"按你所用模型的上限填，填超了上游会报错"，而不是假装算过一个 `min(...)`
+  （早先界面上就写着"会被模型真实能力自动裁剪"，而代码里根本没有这段裁剪）；
+- **「每轮询问」是真的会停**（`ChatService.runStream` 里 `askEachRound` 那个分支）：
+  判定说"还能再写一轮"时不再自己往下写，而是把决定权交回用户，界面上长出「继续写」。
+  这个档位曾经是**空转的**——实现只区分"是不是 off"，于是它与「自动续写」跑的是同一段逻辑
+  （用户反馈："每轮询问没有效果"）。两条约束别动：
+  1. **不新建消息**：`continueWriting` 复用同一条节点，把已有段当作"已定稿的轮次"交回去
+     （拼出来的请求与上一轮逐字节一致，前缀缓存照旧命中），否则"一个气泡连续写"的观感就断了；
+  2. **邀请存内存、不落库**（`continuableMessageId`）：它表达的是"现在轮到你决定了"，
+     不是"这条消息曾经怎样"—— 后者要加一列数据与一次迁移，而对解释历史毫无用处。
+     代价如实写在类型注释里：重启应用后按钮不会回来（想接着写，打个「继续」同样做得到）。
+  `tests/application/continuationEngine.test.ts` 里 6 例钉住（含"关闭档位不挂邀请"）；
 
 ## 加东西时的落点
 

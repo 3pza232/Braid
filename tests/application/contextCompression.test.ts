@@ -42,6 +42,13 @@ function build(context: Partial<AppSettings['context']>, rounds: number) {
 
   const settings: AppSettings = structuredClone(DEFAULT_APP_SETTINGS);
   settings.context = { ...settings.context, ...context };
+  /*
+   * 把「单轮输出上限」压成 0
+   *
+   * 预算 = 上下文长度 − 单轮输出上限，而这些用例想直接拿 `maxContextTokens`
+   * 当预算用（早先预算还有一个独立的「为输出预留」字段，已经并进这里了）。
+   */
+  settings.sampling = { ...settings.sampling, maxTokens: 0 };
   const settingsApi = {
     get: () => settings,
     isLoaded: () => true,
@@ -60,7 +67,7 @@ function build(context: Partial<AppSettings['context']>, rounds: number) {
  * 预算 2200、触发线 85% = 1870；四轮各约 519 token → 约 2076：
  * 落在 [1870, 2200) 里，正好是"该压缩但还没到硬上限"的窗口。
  */
-const NEAR_FULL = { maxContextTokens: 2700, reservedForOutput: 500, compressAt: 0.85 };
+const NEAR_FULL = { maxContextTokens: 2200, compressAt: 0.85 };
 
 async function fillHistory(service: ChatService): Promise<void> {
   for (const label of ['第一轮', '第二轮', '第三轮', '第四轮']) {
@@ -109,7 +116,7 @@ describe('自动压缩（compression: auto）', () => {
     // 用"不压缩 + 手动压"来验证降幅：自动模式会在填历史的过程中就压掉，
     // 那时再取 before/after 比的其实是"压缩前后又发了一条消息"，结论没有意义
     const { service } = build(
-      { maxContextTokens: 1_000_000, reservedForOutput: 4096, compression: 'off', compressAt: 0.85, keepRecentMessages: 1 },
+      { maxContextTokens: 1_000_000, compression: 'off', compressAt: 0.85, keepRecentMessages: 1 },
       4,
     );
     await service.load();
@@ -136,7 +143,7 @@ describe('不压缩（compression: off）', () => {
 
   it('超出上限时拦住发送，并说清楚下一步怎么做', async () => {
     const { service, requests } = build(
-      { maxContextTokens: 200, reservedForOutput: 100, compression: 'off', compressAt: 0.85, keepRecentMessages: 1 },
+      { maxContextTokens: 100, compression: 'off', compressAt: 0.85, keepRecentMessages: 1 },
       1,
     );
     await service.load();
@@ -161,7 +168,7 @@ describe('不压缩（compression: off）', () => {
 
   it('提示里给出"压缩或调大上限"这两条可执行的路', async () => {
     const { service } = build(
-      { maxContextTokens: 200, reservedForOutput: 100, compression: 'off', compressAt: 0.85, keepRecentMessages: 1 },
+      { maxContextTokens: 100, compression: 'off', compressAt: 0.85, keepRecentMessages: 1 },
       1,
     );
     await service.load();
@@ -177,7 +184,7 @@ describe('不压缩（compression: off）', () => {
 describe('手动压缩（顶栏菜单的按钮）', () => {
   it('不压缩模式下手动点一下也能压', async () => {
     const { service, compressions } = build(
-      { maxContextTokens: 1_000_000, reservedForOutput: 4096, compression: 'off', compressAt: 0.85, keepRecentMessages: 1 },
+      { maxContextTokens: 1_000_000, compression: 'off', compressAt: 0.85, keepRecentMessages: 1 },
       4,
     );
     await service.load();

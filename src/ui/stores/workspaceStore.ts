@@ -63,7 +63,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => {
       writeState: 'missing' as HandleState,
       canRead: false,
       canWrite: false,
-      permission: { allowEdit: false, source: 'global' },
       supported: true,
       unsupportedReason: null,
       entries: [],

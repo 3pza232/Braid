@@ -485,7 +485,7 @@ export function Sidebar() {
                 : conversations.length}
             </span>
           </button>
-          <Tooltip label={importing ? '正在导入…' : '导入备份（追加，不覆盖）'}>
+          <Tooltip label={importing ? '正在导入…' : '导入备份，只追加不覆盖'}>
             <IconButton
               label={importing ? '正在导入' : '导入备份'}
               size={24}

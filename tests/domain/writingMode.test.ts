@@ -3,6 +3,7 @@ import {
   DEFAULT_CONTINUATION_PROMPT,
   DEFAULT_WRITING_MODES,
   WRITING_MODES,
+  charsPerRoundOf,
   estimatedRounds,
   softMaxOf,
   type WritingModePreset,
@@ -14,7 +15,6 @@ const preset = (overrides: Partial<WritingModePreset> = {}): WritingModePreset =
   enabled: true,
   minOutputChars: 4000,
   softMaxRatio: 1.3,
-  maxTokensPerRequest: 8192,
   continuation: 'auto',
   stallLimit: 2,
   ...overrides,
@@ -32,18 +32,37 @@ describe('softMaxOf', () => {
 });
 
 describe('estimatedRounds（"约需 20 轮"这种提示的来源）', () => {
+  const TOKENS_8K = 8192;
+
   it('续写关闭时只有 1 轮 —— 别让用户以为关掉后还会自动连写', () => {
-    expect(estimatedRounds(preset({ continuation: 'off', minOutputChars: 100_000 }))).toBe(1);
+    expect(estimatedRounds(preset({ continuation: 'off', minOutputChars: 100_000 }), TOKENS_8K)).toBe(1);
   });
 
   it('按每轮实际能产出的字数换算并向上取整', () => {
-    expect(estimatedRounds(preset({ minOutputChars: 20_000 }), 4800)).toBe(5); // ceil(4.17)
-    expect(estimatedRounds(preset({ minOutputChars: 96_000 }), 4800)).toBe(20);
+    // 8192 token ÷ 1.7 ≈ 4,819 汉字/轮
+    expect(estimatedRounds(preset({ minOutputChars: 20_000 }), TOKENS_8K)).toBe(5); // ceil(4.15)
+    expect(estimatedRounds(preset({ minOutputChars: 96_000 }), TOKENS_8K)).toBe(20);
   });
 
   it('下限极小也至少报 1 轮（0 轮没有意义）', () => {
-    expect(estimatedRounds(preset({ minOutputChars: 0 }), 4800)).toBe(1);
-    expect(estimatedRounds(preset({ minOutputChars: 10 }), 4800)).toBe(1);
+    expect(estimatedRounds(preset({ minOutputChars: 0 }), TOKENS_8K)).toBe(1);
+    expect(estimatedRounds(preset({ minOutputChars: 10 }), TOKENS_8K)).toBe(1);
+  });
+
+  /*
+   * 「每轮能写多少」**从生效的单轮输出上限换算**，不写死一个数。
+   *
+   * 这一条是回归：早先默认写死"每轮 4,800 字"（那是 maxTokens = 8192 的换算结果）。
+   * 上限放开到 100 万 token 之后，用户填 384,000 时会被说成"约需 80 轮" ——
+   * 而这个数字是他判断"要花多久、多少钱"的依据。
+   */
+  it('按传入的单轮输出上限换算：上限越大，需要的轮数越少', () => {
+    expect(charsPerRoundOf(TOKENS_8K)).toBe(4819);
+
+    const target = preset({ minOutputChars: 10_000 });
+    expect(estimatedRounds(target, TOKENS_8K)).toBe(3); // ceil(10000 / 4819)
+    // 上限大得多 → 一轮就够，而不是仍然报 3 轮
+    expect(estimatedRounds(target, 384_000)).toBe(1);
   });
 });
 
@@ -63,7 +82,7 @@ describe('内置档位预设', () => {
     expect(target.minOutputChars).toBeGreaterThan(0);
     // stallLimit 为 0 会让"鬼打墙"保护立即触发，等于关掉了续写
     expect(target.stallLimit).toBeGreaterThan(0);
-    expect(target.maxTokensPerRequest).toBeGreaterThan(0);
+    // 「每轮最多写多少」不在这里：那是全局共享的 sampling.maxTokens（设置 → 上下文）
   });
 
   it('三个档位的下限递增（短 < 中 < 长）', () => {
@@ -93,20 +112,30 @@ describe('内置档位预设', () => {
 
 describe('DEFAULT_CONTINUATION_PROMPT', () => {
   /*
-   * 续写提示词是"防重复"的主力（见 value-objects/writingMode.ts 的说明）：
-   * 它必须明确禁止复述前文，否则多轮续写会出现大段重复。
-   * 这类文案很容易在改写时被稀释掉，所以把关键约束钉在这里。
+   * 【这一版是用户换的：从"硬约束"改成"说明来意"】
+   *
+   * 上一版是四条硬约束（不要重复 / 不要元话语 / 保持人称时态密度 / 不要强行收尾）。
+   * 实际上手写长文时发现模型开始**用提要式写法跳过内容**（一行一章往前推）——
+   * "不要重复"与"不要跳跃"被一起执行了。所以现在只说明这条指令的来意，
+   * 把创作空间还给模型。
+   *
+   * 因此下面钉的是这段文案的**意图**，而不是具体句子。如果哪天又出现大段重复，
+   * 正确的修法是改这段文案（见 `value-objects/writingMode.ts` 里的注释），
+   * 改完这里也要跟着改 —— 这种"故意写死"的断言就是为了让改动留下痕迹。
    */
-  it('明确要求不复述前文', () => {
-    expect(DEFAULT_CONTINUATION_PROMPT).toContain('不要重复');
+  it('说明来源：这是工具为了凑够单次输出量补的，不是用户在催更', () => {
+    expect(DEFAULT_CONTINUATION_PROMPT).toContain('工具');
+    expect(DEFAULT_CONTINUATION_PROMPT).toContain('足够多内容量');
   });
 
-  it('明确说明"被截断不等于写完"，否则模型会自己收尾', () => {
-    expect(DEFAULT_CONTINUATION_PROMPT).toContain('截断');
+  it('明确请它别被这段指令影响创作（否则会被当成新的写作要求）', () => {
+    expect(DEFAULT_CONTINUATION_PROMPT).toContain('无需在意');
+    expect(DEFAULT_CONTINUATION_PROMPT).toContain('别被这段指令影响');
   });
 
-  it('要求从断点无缝衔接', () => {
-    expect(DEFAULT_CONTINUATION_PROMPT).toContain('无缝衔接');
+  it('不再带硬约束 —— 那一版会让模型为"避免重复"而跳过内容（用户实测）', () => {
+    expect(DEFAULT_CONTINUATION_PROMPT).not.toContain('不要重复');
+    expect(DEFAULT_CONTINUATION_PROMPT).not.toContain('元话语');
   });
 
   it('是多行文本，不是被压成一行', () => {

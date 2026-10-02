@@ -4,8 +4,6 @@ import type { SamplingParams } from './sampling';
 import { DEFAULT_SAMPLING_PARAMS } from './sampling';
 import type { WritingMode, WritingModePreset } from './writingMode';
 import { DEFAULT_CONTINUATION_PROMPT, DEFAULT_WRITING_MODES } from './writingMode';
-import type { WorkspaceSettings } from './workspace';
-import { DEFAULT_WORKSPACE_SETTINGS } from './workspace';
 
 export const CURRENT_SETTINGS_SCHEMA_VERSION = 1;
 
@@ -75,12 +73,13 @@ export interface IdentitySettings {
 /**
  * 上下文策略
  *
- * 默认 1,000,000 是**用户可改的默认值**，不是硬上限；
- * 实际生效值 = min(设定值, 模型真实上限) − 输出预留，UI 必须显示实际值。
+ * 默认 1,000,000 是**用户可改的默认值**，不是硬上限。
+ * 真正可用的预算 = 这个值 − **单轮输出上限**（`sampling.maxTokens`）——
+ * 留给输出的那一块不再单独配一遍：同一个意思填两个地方，迟早会出现
+ * "预留 8k、上限却填了 384k"这种自相矛盾（见 `sampling.ts` 里 maxTokens 的说明）。
  */
 export interface ContextSettings {
   maxContextTokens: number;
-  reservedForOutput: number;
   /** 至少保留最近多少**轮**原文（一轮 = 一问一答，含其间的工具往来） */
   keepRecentMessages: number;
   /**
@@ -248,8 +247,6 @@ export interface AppSettings {
   messageDisplay: MessageDisplaySettings;
   appearance: AppearanceSettings;
   composer: ComposerSettings;
-  /** 工作区权限（读默认允许；写需显式开启，见 value-objects/workspace.ts） */
-  workspace: WorkspaceSettings;
 }
 
 /* ────────────────────────── 模型配置的读写辅助 ────────────────────────── */
@@ -315,7 +312,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   sampling: { ...DEFAULT_SAMPLING_PARAMS },
   context: {
     maxContextTokens: 1_000_000,
-    reservedForOutput: 8192,
+
     keepRecentMessages: 6,
     compression: 'auto',
     compressAt: 0.85,
@@ -357,7 +354,6 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     sendShortcut: 'enter',
     maxInputHeight: 260,
   },
-  workspace: { ...DEFAULT_WORKSPACE_SETTINGS },
 };
 
 /** 一层局部更新（每个分组内部按字段合并） */
@@ -417,7 +413,6 @@ export function mergeAppSettings(base: AppSettings, patch: AppSettingsPatch): Ap
     },
     appearance: pickGroup(base.appearance, patch.appearance),
     composer: pickGroup(base.composer, patch.composer),
-    workspace: pickGroup(base.workspace, patch.workspace),
     writingModes,
     defaultWritingMode: patch.defaultWritingMode ?? base.defaultWritingMode,
     continuationPrompt: patch.continuationPrompt ?? base.continuationPrompt,

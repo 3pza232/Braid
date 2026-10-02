@@ -40,6 +40,15 @@ interface MessageItemProps {
   onEdit: (id: MessageId, text: string, mode: EditSubmitMode) => void;
   onDelete: (id: MessageId) => void;
   onRegenerate: (id: MessageId) => void;
+  /** 接着往下写（「每轮询问」档位） */
+  onContinue: (id: MessageId) => void;
+  /**
+   * 这一条正**等着用户点头**才继续写
+   *
+   * 只有「每轮询问」档位会产生它。做成一个必须显式传进来的布尔而不是让组件
+   * 自己去读快照：否则每条消息都要订阅一次聊天快照，`memo` 也就白做了。
+   */
+  canContinue?: boolean;
   onSelectVariant: (id: MessageId, delta: number) => void;
   onCopy: (text: string) => void;
 }
@@ -111,6 +120,8 @@ function MessageItemView({
   onRegenerate,
   onSelectVariant,
   onCopy,
+  onContinue,
+  canContinue = false,
 }: MessageItemProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -374,14 +385,15 @@ function MessageItemView({
         </IconButton>
       </Tooltip>
       {node.role === 'assistant' ? (
-        <Tooltip label="重新生成（新增一个版本）">
+        <Tooltip label="重新生成">
           <IconButton label="重新生成" size={26} onClick={() => onRegenerate(node.id)}>
             <IconRefresh size={14} />
           </IconButton>
         </Tooltip>
       ) : null}
       <Tooltip label="删除此条消息">
-        <IconButton label="删除" size={26} onClick={() => onDelete(node.id)}>
+        {/* 危险色：这一排里只有它是不可撤销的，必须一眼可辨（见 module.css 的 .danger） */}
+        <IconButton label="删除" size={26} className={styles.danger} onClick={() => onDelete(node.id)}>
           <IconTrash size={14} />
         </IconButton>
       </Tooltip>
@@ -460,7 +472,7 @@ function MessageItemView({
                 <IconClose size={13} />
                 取消
               </button>
-              <Tooltip label="只改文字：不产生新版本、不重新生成（适合修错别字）">
+              <Tooltip label="只改文字，不产生新版本">
                 <button type="button" className={styles.ghostBtn} onClick={() => submit('save')}>
                   保存
                 </button>
@@ -471,7 +483,7 @@ function MessageItemView({
                 编辑回答的真实意图几乎总是"改掉写错的字"，所以只留保存。
               */}
               {isUser ? (
-                <Tooltip label="新增一条并列提问并重新生成（原内容都保留，可切换）">
+                <Tooltip label="另存为新提问并重新生成">
                   <button type="button" className={styles.primaryBtn} onClick={() => submit('send')}>
                     保存并发送
                   </button>
@@ -588,6 +600,30 @@ function MessageItemView({
               </div>
               {isUser ? null : actions}
             </div>
+
+            {/*
+              「每轮询问」的落点
+
+              这一档停下来的原因是**在等用户决定**，不是写完了 —— 所以必须有一个
+              看得见、点得到的东西，否则用户只会以为"怎么突然不写了"。
+              刻意不塞进那一排图标按钮（它们是悬停才显形的）：那排按钮里多一个
+              长得一样的图标，等于把"该你决定了"藏了起来。
+            */}
+            {canContinue && !editing ? (
+              <div className={styles.continueRow}>
+                <button
+                  type="button"
+                  className={styles.continueBtn}
+                  onClick={() => onContinue(node.id)}
+                >
+                  <IconRefresh size={13} />
+                  继续写
+                </button>
+                <span className={styles.continueHint}>
+                  当前档位设为「每轮询问」，所以停在这里等你决定
+                </span>
+              </div>
+            ) : null}
 
             {metaEntries.length > 0 ? (
               <div className={styles.metaRow}>

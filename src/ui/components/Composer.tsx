@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { resolveConfig } from '@domain/rules/resolveConfig';
+import { effectiveMaxOutput } from '@domain/value-objects/sampling';
 import { estimateTokens } from '@domain/value-objects/usage';
 import { estimatedRounds, WRITING_MODES, type WritingMode } from '@domain/value-objects/writingMode';
 import { useChatStore } from '@ui/stores/chatStore';
@@ -68,6 +69,8 @@ export function Composer() {
     el.style.height = `${Math.min(el.scrollHeight, maxInputHeight)}px`;
   }, [text, maxInputHeight]);
 
+  // 每轮能写多少由全局共享的「单轮输出上限」决定（设置 → 上下文），"约几轮"要按它算
+  const maxOutputTokens = effectiveMaxOutput(settings.sampling);
   const modes: Array<{ id: WritingMode | 'chat'; label: string; hint: string }> = [
     { id: 'chat', label: '普通', hint: '单次生成，不续写' },
     ...WRITING_MODES.filter((mode) => settings.writingModes[mode].enabled).map((mode) => {
@@ -75,7 +78,7 @@ export function Composer() {
       return {
         id: mode,
         label: preset.label,
-        hint: `下限 ${preset.minOutputChars.toLocaleString()} 字 · 约 ${estimatedRounds(preset)} 轮`,
+        hint: `下限 ${preset.minOutputChars.toLocaleString()} 字 · 约 ${estimatedRounds(preset, maxOutputTokens)} 轮`,
       };
     }),
   ];

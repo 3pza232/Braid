@@ -87,20 +87,26 @@ export interface FakeWorkspace {
   writes: Array<{ path: string; content: string }>;
   /** 记录**尝试**写入的路径（含被拒的）：区分"没落盘"与"根本没尝试" */
   attempts: string[];
-  allowEdit: boolean;
+  /**
+   * 浏览器有没有授予这个目录的**写入**权限
+   *
+   * 这是现在唯一会让"写文件"失败的原因（早先还有一层"允许编辑"开关，已删掉 ——
+   * 选中工作区就等于给了读写权）。把它做成可关闭的，是为了测"缺写入授权时"
+   * 那句提示是否指对了地方。
+   */
+  writeGranted: boolean;
 }
 
 export function createFakeWorkspace(): FakeWorkspace {
-  const state: FakeWorkspace = { writes: [], attempts: [], allowEdit: true, api: null as never };
+  const state: FakeWorkspace = { writes: [], attempts: [], writeGranted: true, api: null as never };
 
   const snapshot = (): WorkspaceSnapshot => ({
     loaded: true,
     root: { id: 'fsw-1', label: '假工作区' },
     handleState: 'granted',
-    writeState: state.allowEdit ? 'granted' : 'prompt',
+    writeState: state.writeGranted ? 'granted' : 'prompt',
     canRead: true,
-    canWrite: state.allowEdit,
-    permission: { allowEdit: state.allowEdit, source: 'global' },
+    canWrite: state.writeGranted,
     supported: true,
     unsupportedReason: null,
     entries: [],
@@ -121,12 +127,12 @@ export function createFakeWorkspace(): FakeWorkspace {
     readFile: async () => ok('（假文件内容）'),
     writeFile: async (path: string, content: string) => {
       state.attempts.push(path);
-      if (!state.allowEdit) {
+      if (!state.writeGranted) {
         return {
           ok: false,
           error: {
             code: 'FS_EDIT_DENIED',
-            message: '编辑工作区文件未获授权',
+            message: '浏览器还没授予这个目录的写入权限',
             retryable: false,
           },
         } as never;
@@ -207,7 +213,8 @@ export interface RunResult {
 export async function runConversation(options: {
   settings?: AppSettings;
   rounds: ChatStreamEvent[][];
-  allowEdit?: boolean;
+  /** 浏览器授予写入权限了吗（唯一会让"写文件"失败的开关） */
+  writeGranted?: boolean;
   prompt?: string;
   /**
    * 发送之前的挂钩，拿到的是**已经装配好、还没开始跑**的服务
@@ -219,7 +226,7 @@ export async function runConversation(options: {
 }): Promise<RunResult> {
   const { store, messages } = createStores();
   const workspace = createFakeWorkspace();
-  workspace.allowEdit = options.allowEdit ?? true;
+  workspace.writeGranted = options.writeGranted ?? true;
   const tools = createWorkspaceToolRegistry(workspace.api);
   // 需要压制上下文压缩的用例请改用 tests/application/contextCompression.test.ts 里的装配
   const { provider, requests, compressions } = createFakeProvider(options.rounds);

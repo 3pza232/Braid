@@ -3,7 +3,7 @@ import type { AppSettings, ModelProfile } from '@domain/value-objects/appSetting
 import { activeProfileOf, profileById } from '@domain/value-objects/appSettings';
 import type { AvatarRef } from '@domain/value-objects/avatar';
 import { DEFAULT_ASSISTANT_AVATAR, DEFAULT_USER_AVATAR } from '@domain/value-objects/avatar';
-import type { SamplingParams } from '@domain/value-objects/sampling';
+import { effectiveMaxOutput, type SamplingParams } from '@domain/value-objects/sampling';
 import { softMaxOf, type WritingMode } from '@domain/value-objects/writingMode';
 
 /**
@@ -52,8 +52,6 @@ export interface ResolvedConfig {
   minOutputChars: number;
   /** 续写模式：每轮续写时附带的指令 */
   continuationPrompt: string;
-  /** 单次请求的 max_tokens（续写档位专用；普通对话用 `params.maxTokens`） */
-  maxTokensPerRequest: number;
   /** 软上限（字数）＝ 下限 × 系数。达到即停，防止为凑字数跑飞 */
   softMaxChars: number;
   /** 连续 N 轮没有新增内容就中止（防"鬼打墙"） */
@@ -61,9 +59,17 @@ export interface ResolvedConfig {
   /** 续写方式：auto 自动 / ask 每轮询问 / off 关闭 */
   continuation: 'auto' | 'ask' | 'off';
 
+  /** 上下文窗口上限（设置项） */
   maxContextTokens: number;
-  reservedForOutput: number;
-  /** 可用上下文预算 = 上限 − 输出预留；<= 0 表示没有预算信息（不压缩） */
+  /**
+   * 留给输出的那一块 = 生效的单轮输出上限（`sampling.maxTokens`）
+   *
+   * 它就是请求里要下发的 max_tokens，因此**不再单独配置**：
+   * 早先另有一个「为输出预留」设置项，两处填同一个意思，
+   * 很容易出现"预留 8k、上限却填了 384k"这种自相矛盾。
+   */
+  outputReserve: number;
+  /** 可用上下文预算 = 上限 − outputReserve；<= 0 表示没有预算信息（不压缩） */
   contextBudget: number;
   /** 至少保留最近多少轮原文（一轮 = 一问一答） */
   keepRecentTurns: number;
@@ -149,17 +155,19 @@ export function resolveConfig(settings: AppSettings, conversation: Conversation 
   // 续写提示词现在是**全局共用一份**（不再按档位各配），会话仍可覆盖
   const continuationPrompt = nonEmpty(conversation?.continuationPrompt) ?? settings.continuationPrompt;
 
+  // ── 采样参数 ──
+  // 放在上下文之前：上下文预算要减掉"留给输出的那一块"，而那一块就是这个 maxTokens
+  const params = mergeParams(settings.sampling, instance?.params, conversation?.params);
+  const outputReserve = effectiveMaxOutput(params);
+
   // ── 上下文 ──
   // 上限只有全局一层：它是"这份配置给模型留了多大窗口"的性质，按会话改没有正当用途
   const maxContextTokens = settings.context.maxContextTokens;
   // 预算在这里算好，压缩引擎不再自己去翻设置 —— 与续写引擎同一条纪律
-  const contextBudget = Math.max(0, maxContextTokens - settings.context.reservedForOutput);
+  const contextBudget = Math.max(0, maxContextTokens - outputReserve);
   const conversationKeep = conversation?.keepRecentMessages ?? null;
   const keepRecentTurns = conversationKeep ?? settings.context.keepRecentMessages;
   const keepSource: Layer = conversationKeep !== null ? 'conversation' : 'global';
-
-  // ── 采样参数 ──
-  const params = mergeParams(settings.sampling, instance?.params, conversation?.params);
   const paramsSource: Layer =
     hasAnyParam(conversation?.params) ? 'conversation' : hasAnyParam(instance?.params) ? 'role' : 'global';
 
@@ -203,18 +211,17 @@ export function resolveConfig(settings: AppSettings, conversation: Conversation 
     minOutputChars,
     continuationPrompt,
     /*
-     * 下面四个是**续写引擎的唯一输入源**
+     * 下面三个是**续写引擎的唯一输入源**
      *
      * 之前引擎要自己去翻 `settings.writingModes[mode]`，那会破坏
      * resolveConfig 声明的"分层解析只在这里做一次"—— 也会让
      * "会话覆盖是否生效"出现两套判断。全部在这里解析好，引擎只吃这份快照。
      */
-    maxTokensPerRequest: modePreset.maxTokensPerRequest,
     softMaxChars: softMaxOf(modePreset),
     stallLimit: modePreset.stallLimit,
     continuation: modePreset.continuation,
     maxContextTokens,
-    reservedForOutput: settings.context.reservedForOutput,
+    outputReserve,
     contextBudget,
     keepRecentTurns,
     compressAt: settings.context.compressAt,

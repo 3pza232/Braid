@@ -1,8 +1,14 @@
 import { SAMPLING_CONSTRAINTS } from '@domain/value-objects/sampling';
 import type { AppSettings, AppSettingsPatch } from '@domain/value-objects/appSettings';
-import { NumberField, SettingGroup, SettingRow, Slider } from '@ui/primitives';
+import { SettingGroup, SettingRow, Slider } from '@ui/primitives';
 
-/** 用滑块调的四个参数（`maxTokens` 是数字输入，单独一行） */
+/**
+ * 用滑块调的四个参数
+ *
+ * `maxTokens`（单轮输出上限）**不在这里**：它同时决定上下文预算里"留给输出的那一块"，
+ * 所以界面上归到「上下文」分区 —— 只有在那里用户才看得懂为什么要从窗口里扣掉一块。
+ * 字段本身仍是采样参数（`settings.sampling.maxTokens`），会话/角色照样可以覆盖。
+ */
 const SLIDER_KEYS = ['temperature', 'topP', 'frequencyPenalty', 'presencePenalty'] as const;
 
 interface SamplingSectionProps {
@@ -36,20 +42,6 @@ export function SamplingSection({ settings, update }: SamplingSectionProps) {
           </SettingRow>
         );
       })}
-      <SettingRow
-        label={SAMPLING_CONSTRAINTS.maxTokens.label}
-        help={SAMPLING_CONSTRAINTS.maxTokens.hint}
-      >
-        <NumberField
-          value={settings.sampling.maxTokens ?? 8192}
-          min={256}
-          max={65536}
-          step={256}
-          onChange={(value) => update({ sampling: { maxTokens: value } })}
-          suffix="tok"
-          width={140}
-        />
-      </SettingRow>
     </SettingGroup>
   );
 }

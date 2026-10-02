@@ -1,4 +1,5 @@
 import type { AppSettings, AppSettingsPatch } from '@domain/value-objects/appSettings';
+import { MAX_OUTPUT_TOKENS_CEILING, effectiveMaxOutput } from '@domain/value-objects/sampling';
 import { NumberField, Segmented, SettingGroup, SettingRow, Slider } from '@ui/primitives';
 
 interface ContextSectionProps {
@@ -9,20 +10,14 @@ interface ContextSectionProps {
 /**
  * 上下文分区
  *
- * 从 `SettingsPanel` 搬出来的第二个分区。搬它的原则：**只搬家，不改语义** ——
- * JSX、取值、文案一字不动，只是把 `settings` / `update` 换成 props。
- * 验证靠面板的冒烟测试（每个分区都渲染一遍），而不是通读比对。
+ * 【关于这里的 `help` 文案】一句能读懂的话，不写实现细节。
+ * 早先这里写的是"超预算时按信息损失从小到大降级：先把过长的工具输出压成头+尾…"
+ * 这类句子 —— 它解释的是代码，不是用户要做的决定（用户反馈："别写小作文"）。
  */
 export function ContextSection({ settings, update }: ContextSectionProps) {
   return (
-    <SettingGroup
-      title="上下文"
-      help="超预算时按「信息损失从小到大」降级：先压缩过长的工具输出，再整轮丢弃最早的历史（保留最近几轮原文）。做了什么会在顶栏如实写明 —— 发出去的内容与屏幕上看到的不再完全一致时，用户有权知道"
-    >
-      <SettingRow
-        label="上下文长度"
-        help="默认 1,000,000 tokens。实际生效值 = min(这里设定的值, 模型真实上限) − 输出预留；界面上会显示实际值，不会静默失败"
-      >
+    <SettingGroup title="上下文" help="上下文不够用时的处理方式">
+      <SettingRow label="上下文长度" help="按你所用模型的上下文窗口填，单位 token">
         <NumberField
           value={settings.context.maxContextTokens}
           min={4096}
@@ -33,25 +28,33 @@ export function ContextSection({ settings, update }: ContextSectionProps) {
           width={150}
         />
       </SettingRow>
-      <SettingRow label="为输出预留" help="从上下文预算里先扣掉的部分，避免请求被上游拒绝">
+      {/*
+        「单轮输出上限」放在这里，而不是「生成参数」里
+
+        它是**上下文预算的另一半**：可用预算 = 上面的长度 − 这一项。
+        两件事分在两个分区里，用户永远算不清"为什么预算比窗口小"。它的值是
+        `sampling.maxTokens`（普通对话与短/中/长档位共享同一个），所以也仍然
+        受「生成参数」那一层的会话/角色覆盖影响 —— 显示的是**生效值**。
+      */}
+      <SettingRow
+        label="单轮输出上限"
+        help="一次请求最多输出多少 token。它同时也是上下文的「输出预留」：填多大，预算就少多少"
+      >
         <NumberField
-          value={settings.context.reservedForOutput}
-          min={512}
-          max={131072}
-          step={512}
-          onChange={(value) => update({ context: { reservedForOutput: value } })}
+          value={effectiveMaxOutput(settings.sampling)}
+          min={256}
+          max={MAX_OUTPUT_TOKENS_CEILING}
+          step={256}
+          onChange={(value) => update({ sampling: { maxTokens: value } })}
           suffix="tok"
           width={150}
         />
       </SettingRow>
-      <SettingRow
-        label="保留最近原文"
-        help="裁剪时至少保留最近多少轮的完整原文（一轮 = 一问一答，含其间的工具往来）。设小会丢得更狠，设大会让更早的历史先被压"
-      >
+      <SettingRow label="保留最近原文" help="压缩时至少保留最近多少轮的原文">
         <NumberField
           value={settings.context.keepRecentMessages}
           min={1}
-          max={200}
+          max={1000}
           step={1}
           onChange={(value) => update({ context: { keepRecentMessages: value } })}
           suffix="轮"
@@ -60,7 +63,7 @@ export function ContextSection({ settings, update }: ContextSectionProps) {
       </SettingRow>
       <SettingRow
         label="上下文压缩"
-        help="用量涨到触发线时，把最早的历史改写成一段纪要（保留人物、设定、已做的事，丢掉寒暄与过程细节），原文不会被删，可在顶栏的上下文菜单里回看。关掉后绝不自动改写：真的超出上限时会拦住发送，由你决定压不压"
+        help="用量到触发线时，把最早的历史换成一段纪要。原文不会删除，仍可回看"
       >
         <Segmented
           value={settings.context.compression}
@@ -71,10 +74,7 @@ export function ContextSection({ settings, update }: ContextSectionProps) {
           ]}
         />
       </SettingRow>
-      <SettingRow
-        label="压缩触发线"
-        help="上下文用量达到这个比例就自动压缩。默认 85% —— 留一段缓冲，等到贴边才动手往往就来不及了（压缩本身也要占用一点上下文）"
-      >
+      <SettingRow label="压缩触发线" help="用量到这个比例就自动压缩">
         <Slider
           value={settings.context.compressAt}
           min={0.5}

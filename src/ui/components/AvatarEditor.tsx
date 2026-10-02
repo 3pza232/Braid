@@ -66,7 +66,7 @@ export function AvatarEditor({
         <span className={styles.hint}>未设置时显示名称首字</span>
       )}
 
-      <Tooltip label="头像底色（没有图片时作为背景）">
+      <Tooltip label="头像底色">
         <input
           type="color"
           className={styles.colorInput}

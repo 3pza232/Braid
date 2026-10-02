@@ -19,9 +19,14 @@ function continuationSettings(target: number): AppSettings {
   settings.writingModes.medium = {
     ...settings.writingModes.medium,
     minOutputChars: target,
-    maxTokensPerRequest: 512,
     stallLimit: 2,
   };
+  /*
+   * 单轮输出上限是**全局共享**的采样参数（界面在 设置 → 上下文），不再是档位字段。
+   * 这里取 500：它同时是"每次请求的 max_tokens"与"上下文预算里的输出预留"，
+   * 下面几条关于预算的断言正是照这个数写的。
+   */
+  settings.sampling = { ...settings.sampling, maxTokens: 500 };
   return settings;
 }
 
@@ -29,6 +34,21 @@ const chunkRound = (text: string): ChatStreamEvent[] => [
   { kind: 'delta', text },
   { kind: 'done', finishReason: 'stop' },
 ];
+
+/** 「每轮询问」档位（下限调得很高，保证"还能再写"始终成立） */
+function askSettings(target = 10_000): AppSettings {
+  const settings = continuationSettings(target);
+  settings.writingModes.medium = { ...settings.writingModes.medium, continuation: 'ask' };
+  return settings;
+}
+
+/** 等这一次生成真的收工（收尾落库发生在流结束之后，所以要轮询状态而不是掐时间） */
+async function waitIdle(service: { snapshot: () => { streamingMessageId: unknown } }) {
+  for (let waited = 0; waited < 600; waited += 1) {
+    if (service.snapshot().streamingMessageId === null) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
 
 describe('续写引擎', () => {
   it('没到下限就自动续写，全部内容累积在同一个气泡里', async () => {
@@ -69,13 +89,20 @@ describe('续写引擎', () => {
     expect(nodes.filter((node) => node.role === 'user')).toHaveLength(1);
   });
 
-  it('续写模式下每轮的 max_tokens 用档位里配的那个', async () => {
+  it('续写每一轮都用**全局共享**的单轮输出上限（不再有"档位专属的 max_tokens"）', async () => {
+    /*
+     * 这一条替换了早先"每轮用档位里配的那个 max_tokens"的用例。
+     * 那个档位字段已经并进采样参数：普通对话与短/中/长三个档位共享同一个
+     * 「单轮输出上限」（设置 → 上下文），所以每一轮请求里的 max_tokens
+     * 都应当等于它 —— 用户再也不用猜"我改的是哪一个"。
+     */
     const { requests } = await runConversation({
       settings: continuationSettings(20),
       rounds: [chunkRound('一二三四五六七八九十十一'), chunkRound('一二三四五六七八九十十一')],
     });
-    expect(requests[0]?.params?.maxTokens).toBe(512);
-    expect(requests[1]?.params?.maxTokens).toBe(512);
+    // continuationSettings 把采样里的 maxTokens 设成了 500
+    expect(requests[0]?.params?.maxTokens).toBe(500);
+    expect(requests[1]?.params?.maxTokens).toBe(500);
   });
 
   it('达到下限就停，不会多写', async () => {
@@ -85,6 +112,101 @@ describe('续写引擎', () => {
       rounds: [chunkRound('一'.repeat(30))],
     });
     expect(requests.length).toBe(1);
+  });
+
+  /*
+   * ── 「每轮询问」 ──
+   *
+   * 这一档此前是**空转的**：界面给了三个选项，而实现只区分"是不是 off"，
+   * 于是它与「自动续写」跑的是同一段逻辑（用户反馈："每轮询问似乎没有效果"）。
+   * 下面几条把它现在应有的行为钉住。
+   */
+  it('「每轮询问」：写完一轮就停下等用户点头，不自己接着写', async () => {
+    const { requests, node, service } = await runConversation({
+      settings: askSettings(),
+      rounds: [chunkRound('第一轮写了一段'), chunkRound('第二轮又写了一段')],
+    });
+
+    // 只发了一次请求：第二轮的脚本还在，没被用到
+    expect(requests.length).toBe(1);
+    expect(textOf(node)).toBe('第一轮写了一段');
+    // "等你继续"挂在这条消息上 —— 界面据此长出「继续写」按钮
+    expect(service.snapshot().continuableMessageId).toBe(node?.id ?? null);
+    // 它**不是**撞上限停的：那句"撞上限"的收尾语不该出现（那是另一条路径）
+    expect(textOf(node)).not.toContain('上限');
+  });
+
+  it('「每轮询问」：点「继续写」后接着往下写，而且不新建消息', async () => {
+    const run = await runConversation({
+      settings: askSettings(),
+      rounds: [chunkRound('第一轮写了一段'), chunkRound('第二轮又写了一段')],
+    });
+    const id = run.node?.id ?? null;
+    expect(id).not.toBeNull();
+
+    await run.service.continueWriting(id as never);
+    await waitIdle(run.service);
+
+    expect(run.requests.length).toBe(2);
+    // 同一个气泡：新内容累积在**同一条**消息里（新建消息会让"连续写"的观感断掉）
+    expect(run.service.snapshot().tree.nodes).toHaveLength(2);
+    const node = run.service.snapshot().tree.nodes.find((item) => item.id === id) ?? null;
+    expect(textOf(node)).toBe('第一轮写了一段第二轮又写了一段');
+    // 下限还远没到 → 继续挂着邀请，可以一轮轮点下去
+    expect(run.service.snapshot().continuableMessageId).toBe(id);
+  });
+
+  it('「每轮询问」：续写时把**已写的内容**发给模型（否则它会从头再写一遍）', async () => {
+    const run = await runConversation({
+      settings: askSettings(),
+      rounds: [chunkRound('前情提要到此为止'), chunkRound('后面接着写')],
+    });
+
+    await run.service.continueWriting(run.node?.id as never);
+    await waitIdle(run.service);
+
+    /*
+     * 已定稿的段会被当作"上一轮的产出"交给模型（`appendSegmentsToTranscript`），
+     * 因此第二次请求里必须能看到第一轮写出来的字。
+     * 少了它，模型会以为这是新的一轮，于是把开头重写一遍。
+     */
+    expect(JSON.stringify(run.requests[1]?.messages ?? [])).toContain('前情提要到此为止');
+  });
+
+  it('「关闭」：一轮就结束，也不会挂出任何邀请', async () => {
+    const settings = askSettings();
+    settings.writingModes.medium = { ...settings.writingModes.medium, continuation: 'off' };
+
+    const { requests, node, service } = await runConversation({
+      settings,
+      rounds: [chunkRound('一次写完'), chunkRound('不该被用到')],
+    });
+
+    expect(requests.length).toBe(1);
+    expect(textOf(node)).toBe('一次写完');
+    expect(service.snapshot().continuableMessageId).toBeNull();
+  });
+
+  it('用户选择**直接发下一条**而不是点继续：邀请作废（不留一个指向旧消息的按钮）', async () => {
+    const run = await runConversation({
+      settings: askSettings(),
+      rounds: [chunkRound('第一轮'), chunkRound('第二轮'), chunkRound('新的一句')],
+    });
+    const firstId = run.node?.id ?? null;
+    expect(run.service.snapshot().continuableMessageId).toBe(firstId);
+
+    await run.service.send('换一个话题');
+    await waitIdle(run.service);
+
+    /*
+     * 邀请**转到新的那条**上，旧的那条不再挂着按钮 ——
+     * 否则界面上会出现两个「继续写」，用户不知道该点哪个。
+     */
+    const latest = run.service.snapshot().tree.nodes
+      .filter((node) => node.role === 'assistant')
+      .at(-1);
+    expect(run.service.snapshot().continuableMessageId).not.toBe(firstId);
+    expect(run.service.snapshot().continuableMessageId).toBe(latest?.id ?? null);
   });
 
   it('普通对话不受影响：一次请求就是一次回复', async () => {
@@ -130,10 +252,10 @@ describe('续写引擎', () => {
      */
     const settingsFor = (compression: 'auto' | 'off'): AppSettings => {
       const settings = continuationSettings(100_000);
+      // 预算 = 4000 − 500（单轮输出上限，见 continuationSettings）
       settings.context = {
         ...settings.context,
         maxContextTokens: 4000,
-        reservedForOutput: 500,
         keepRecentMessages: 1,
         compression,
         compressAt: 0.8,
@@ -190,7 +312,6 @@ describe('续写引擎', () => {
     settings.context = {
       ...settings.context,
       maxContextTokens: 2500,
-      reservedForOutput: 500,
       compression: 'off',
     };
     const chunk = (label: string) => `${label}内容`.repeat(60);
@@ -236,7 +357,7 @@ describe('续写引擎', () => {
     ]);
 
     // 直接复用 harness 的最小装配，验证"未授权时一个字节都不落盘"
-    workspace.allowEdit = false;
+    workspace.writeGranted = false;
     const { ChatService } = await import('@app/chat/ChatService');
     const { createWorkspaceToolRegistry } = await import('@app/tools/workspaceToolRegistry');
     const service = new ChatService(

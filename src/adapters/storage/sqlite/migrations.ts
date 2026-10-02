@@ -284,4 +284,27 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE conversation DROP COLUMN sync_state`,
     ],
   },
+
+  {
+    version: 10,
+    name: 'drop_workspace_edit_switch',
+    statements: [
+      /*
+       * 删掉「允许编辑工作区文件」这个开关
+       *
+       * 【为什么这个开关该消失】
+       * 它把一件用户心里只有一件事的事情拆成了三层：全局默认 + 会话覆盖 + 浏览器授权。
+       * 用户的实际感受是"我明明选了目录、也开了开关，它还是说没权限" ——
+       * 三层里任何一层没对上，写文件就失败，而界面上看不出是哪一层。
+       *
+       * 现在的语义是**一个动作就够了**：选中工作区 = 给了该目录的读写权
+       *（选目录时浏览器会弹一次授权，那次点击就是用户的同意）。
+       * 于是 `WorkspaceService.writeFile` 只剩两道门：目录还在吗、浏览器放行了吗。
+       *
+       * 旧库里这一列可能是三态（1 / 0 / NULL，NULL = 继承全局）。删掉它**不影响任何数据**：
+       * 它只表达"允不允许"，而现在的答案恒为"允许"。
+       */
+      `ALTER TABLE conversation DROP COLUMN allow_workspace_edit`,
+    ],
+  },
 ];

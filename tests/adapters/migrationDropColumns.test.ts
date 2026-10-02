@@ -41,6 +41,92 @@ function columnsOf(db: Db, table: string): string[] {
   );
 }
 
+describe.skipIf(sqlite === null)('迁移 v10：删掉「允许编辑工作区文件」这一列', () => {
+  /**
+   * 老用户的库：v9 结构，有真实数据（含即将被删的列，且带着非默认值）
+   *
+   * 注意 `workspace_root` 也一起塞了值：它是"选中目录 = 读写权"这个新语义的载体，
+   * 重建表时最不能丢的就是它。
+   */
+  function oldDatabase(): Db {
+    const db = new sqlite!.DatabaseSync(':memory:');
+    apply(db, upTo(9));
+    db.exec(
+      `INSERT INTO conversation (id, title, workspace_root, allow_workspace_edit, created_at, updated_at)
+       VALUES ('c1', '我的小说', 'fsw-1', 1, 1000, 2000)`,
+    );
+    return db;
+  }
+
+  it('该没的没了，别的列与数据一个都不少', () => {
+    const db = oldDatabase();
+
+    // 前提：这一列原本存在、且真的带着值（否则下面的检查没有意义）
+    expect(columnsOf(db, 'conversation')).toContain('allow_workspace_edit');
+    const before = db
+      .prepare('SELECT allow_workspace_edit FROM conversation')
+      .get() as Record<string, unknown>;
+    expect(before['allow_workspace_edit']).toBe(1);
+
+    // 只补差量：模拟真实升级路径（v10 那一条）
+    apply(
+      db,
+      MIGRATIONS.filter((migration) => migration.version === 10),
+    );
+
+    const columns = columnsOf(db, 'conversation');
+    expect(columns).not.toContain('allow_workspace_edit');
+
+    // ── 别的列一个都不能少（重建表最容易伤到的地方） ──
+    expect(columns).toEqual(
+      expect.arrayContaining([
+        'id',
+        'title',
+        'workspace_root',
+        'role_instance_json',
+        'role_id',
+        'model_profile_id',
+        'model',
+        'params_json',
+        'system_prompt',
+        'keep_recent_messages',
+        'writing_mode',
+        'min_output_chars',
+        'continuation_prompt',
+        'assistant_name',
+        'user_name',
+        'active_root_child_id',
+        'forked_from_json',
+        'sort_order',
+        'created_at',
+        'updated_at',
+        'deleted_at',
+        'extensions_json',
+        'schema_version',
+      ]),
+    );
+
+    // ── 数据逐字段完好（尤其是工作区令牌：删掉开关之后它承担了全部语义） ──
+    const row = db
+      .prepare('SELECT * FROM conversation WHERE id = ?')
+      .get('c1') as Record<string, unknown>;
+    expect(row['title']).toBe('我的小说');
+    expect(row['workspace_root']).toBe('fsw-1');
+    expect(row['created_at']).toBe(1000);
+    expect(row['extensions_json']).toBe('{}'); // 默认值没在重建里丢掉
+
+    // ── 升完之后还能正常写入（列清单已同步，插入自然不带被删的列） ──
+    expect(() =>
+      db.exec(
+        `INSERT INTO conversation (id, title, created_at, updated_at)
+         VALUES ('c2', '另一条', 3000, 3000)`,
+      ),
+    ).not.toThrow();
+
+    db.close();
+  });
+});
+
 describe.skipIf(sqlite === null)('迁移 v9：删掉三个只写不读的列', () => {
   /** 老用户的库：v8 结构，有真实数据（含即将被删的三列，且带着非默认值） */
   function oldDatabase(): Db {

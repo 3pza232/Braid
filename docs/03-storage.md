@@ -56,6 +56,7 @@ UI 线程 ── postMessage({id, kind}) ──► sqliteWorker.ts
 | 7 | `context_compression` | 删会话级 `max_context_tokens`、加 `keep_recent_messages` |
 | 8 | `manual_sort_order` | `conversation` / `role_preset` 加 `sort_order`（手动拖动排序的位置） |
 | 9 | `drop_unread_progress_columns` | 删 `message.continuation_index` / `message.reached_target` / `conversation.sync_state` —— 三列一直**只写不读**（信息可由段落数与正文长度推出） |
+| 10 | `drop_workspace_edit_switch` | 删 `conversation.allow_workspace_edit` —— 「允许编辑工作区文件」这个开关整个取消了：**选中工作区就等于给了该目录的读写权**（见 [06-workspace.md](./06-workspace.md)） |
 
 **改 schema 的规矩**：
 
@@ -108,8 +109,9 @@ UI 线程 ── postMessage({id, kind}) ──► sqliteWorker.ts
 **一条坏数据让应用打不开**。同理，`roleInstance` 读成数组之后，
 界面会在 `roleInstance.avatar.color` 上抛错。
 
-三态字段（`allow_workspace_edit`）另有一条：认不出的值退回 `null`（= 继承），
-**不猜一个布尔** —— `false` 的语义是"这条会话明确关闭编辑"，猜错会让全局开关对它静默失效。
+（曾经还有一条针对三态字段 `allow_workspace_edit` 的规则：认不出的值退回 `null`（= 继承），
+**不猜一个布尔**。该字段随迁移 v10 删列一起消失，`toBoolOrNull` 也一并删掉了 ——
+不是那条规则错了，而是它守护的语义已经不存在。）
 
 这一整层由 `tests/adapters/storageTolerance.test.ts` 钉住（逐类覆盖上表）。
 

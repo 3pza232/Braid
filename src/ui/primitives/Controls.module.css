@@ -154,21 +154,121 @@
   font-size: var(--text-xs);
 }
 
-.inputNumber {
+/*
+ * 数字输入：**整只控件是一个框**，框里排"输入 + 单位 + 微调箭头"
+ *
+ * 早先框画在 `<input>` 自己身上、单位用绝对定位贴在它右侧。那样有两处别扭：
+ *  1. 单位与浏览器原生的上下箭头**抢同一个位置**（于是只好给输入框留 34px 内边距，
+ *     而这个数值本来就是猜的）；
+ *  2. 原生箭头不跟主题（深浅色切换后尤其明显）—— 就是"箭头样式没适配"。
+ * 现在把框提到外层容器上，三个部件按 flex 排：单位不会叠到箭头上，
+ * 箭头改自绘（颜色走 token，见下面的 .stepBtn）。
+ */
+.numberWrap {
+  padding-right: 3px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-canvas);
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+.numberWrap:hover {
+  border-color: var(--color-border-strong);
+}
+
+.numberWrap:focus-within {
+  border-color: var(--color-border-focus);
+}
+
+/* 框里那一层不再自带边框与底色，避免"框里再套一个框" */
+.numberInput {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  border: none;
+  background: transparent;
   font-variant-numeric: tabular-nums;
-  padding-right: 34px;
+  /* 去掉原生上下箭头（外观与主题不一致，位置也与单位冲突） */
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.numberInput::-webkit-outer-spin-button,
+.numberInput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .inputPassword {
   letter-spacing: 0.08em;
 }
 
+/* 单位：跟在数字后面（不再是绝对定位 —— 它右边现在是箭头，绝对定位会叠上去） */
 .suffix {
-  position: absolute;
-  right: var(--space-3);
+  flex: none;
+  margin-left: var(--space-2);
   font-size: var(--text-xs);
   color: var(--color-text-tertiary);
   pointer-events: none;
+}
+
+/*
+ * 微调箭头
+ *
+ * **悬停/聚焦才显形**：设置页一屏常有七八个数字框，两枚箭头常显会让整列发吵。
+ * 键盘用户不受影响 —— 数字输入框原生支持上/下键微调，那条能力没被动过。
+ */
+.stepper {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  margin-left: 2px;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.inputWrap:hover .stepper,
+.inputWrap:focus-within .stepper {
+  opacity: 1;
+}
+
+.stepBtn {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 12px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-tertiary);
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard);
+}
+
+.stepBtn:hover:not(:disabled) {
+  background: var(--color-bg-sunken);
+  color: var(--color-accent-default);
+}
+
+.stepBtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* 箭头用纯 CSS 画：不依赖图标字体，颜色随 currentColor 跟着主题走 */
+.stepBtn::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 3.5px solid transparent;
+  border-right: 3.5px solid transparent;
+}
+
+.stepUp::before {
+  border-bottom: 4.5px solid currentColor;
+}
+
+.stepDown::before {
+  border-top: 4.5px solid currentColor;
 }
 
 .textarea {

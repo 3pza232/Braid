@@ -15,7 +15,6 @@ import {
   isPlainObject,
   parseJson,
   parseJsonObject,
-  toBoolOrNull,
   toInt,
   toJson,
   toNumOrNull,
@@ -27,7 +26,6 @@ export const CONVERSATION_COLUMNS = [
   'id',
   'title',
   'workspace_root',
-  'allow_workspace_edit',
   'role_instance_json',
   'role_id',
   'model_profile_id',
@@ -96,9 +94,6 @@ function conversationToRowObject(conversation: Conversation): Record<Conversatio
     id: conversation.id,
     title: conversation.title,
     workspace_root: toText(conversation.workspaceRoot),
-    // 三态：1 / 0 / NULL。NULL 必须原样存进去，它是"继承全局"的载体
-    allow_workspace_edit:
-      conversation.allowWorkspaceEdit === null ? null : conversation.allowWorkspaceEdit ? 1 : 0,
     role_instance_json: conversation.roleInstance ? toJson(conversation.roleInstance) : null,
     role_id: conversation.roleId,
     model_profile_id: toText(conversation.modelProfileId),
@@ -138,7 +133,6 @@ export function conversationFromRow(row: SqlRow): Conversation {
   return createEmptyConversation(id, createdAt, {
     title: typeof row['title'] === 'string' ? row['title'] : DEFAULT_CONVERSATION_TITLE,
     workspaceRoot: toText(row['workspace_root']),
-    allowWorkspaceEdit: toBoolOrNull(row['allow_workspace_edit']),
     roleInstance: toRoleInstance(row['role_instance_json']),
     roleId: roleId === null ? null : asRoleId(roleId),
     modelProfileId: toText(row['model_profile_id']),

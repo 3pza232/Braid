@@ -67,18 +67,12 @@ function createFakeFs(options: FakeFsOptions = {}) {
   return { fs, written, listed, writes, picked, pruned };
 }
 
-function createScope(init: { root?: string | null; override?: boolean | null; globalEdit?: boolean } = {}) {
-  const state = {
-    root: init.root === undefined ? REF.id : init.root,
-    override: init.override ?? null,
-    global: { allowEdit: init.globalEdit ?? true },
-  };
+function createScope(init: { root?: string | null } = {}) {
+  const state = { root: init.root === undefined ? REF.id : init.root };
   const setRootCalls: Array<string | null> = [];
 
   const scope: WorkspaceScope = {
     root: () => state.root,
-    override: () => state.override,
-    global: () => state.global,
     setRoot: async (root) => {
       setRootCalls.push(root);
       state.root = root;
@@ -115,7 +109,36 @@ function denyCode(alerts: readonly WorkspaceAlert[]): string | null {
   return first ? first.code : null;
 }
 
-describe('WorkspaceService.writeFile 的三道门', () => {
+describe('授权状态的刷新（顶栏那颗「需授权」必须跟着走）', () => {
+  it('授权写入之后**连读取状态一起重查** —— 否则顶栏会一直亮着「需授权」', async () => {
+    /*
+     * 场景：重开应用后句柄还在，但浏览器把**读**权限也退回了 'prompt'。
+     * 用户点「授权写入」拿到写权限 —— 读权限其实是一并给到的，所以状态必须重查。
+     *
+     * 早先这里只更新 `writeState` 再 commit，于是顶栏那颗「需授权」亮着不走，
+     * 用户还得再去会话设置里点一次「重新授权」（而他刚刚才点过授权）——
+     * 这是用户实际报上来的表现。
+     */
+    const fsOptions: FakeFsOptions = { readState: 'prompt', writeState: 'prompt' };
+    const { service } = await setup(fsOptions);
+
+    expect(service.snapshot().handleState).toBe('prompt');
+    expect(service.snapshot().canRead).toBe(false);
+
+    // 浏览器在这一刻把读写一起给了（假文件系统的状态是**调用时现取**的）
+    fsOptions.readState = 'granted';
+    fsOptions.writeState = 'granted';
+
+    await service.authorizeWrite();
+
+    expect(service.snapshot().writeState).toBe('granted');
+    // 这一条才是"顶栏不再挂需授权"的依据
+    expect(service.snapshot().handleState).toBe('granted');
+    expect(service.snapshot().canRead).toBe(true);
+  });
+});
+
+describe('WorkspaceService.writeFile 的门禁', () => {
   const cases: Array<{
     name: string;
     fs?: FakeFsOptions;
@@ -142,21 +165,14 @@ describe('WorkspaceService.writeFile 的三道门', () => {
       mustNotWrite: true,
     },
     {
-      name: '开关没开（来源是全局）→ 指向全局设置',
-      scope: { globalEdit: false, override: null },
-      code: 'FS_EDIT_DENIED',
-      says: '全局设置',
-      mustNotWrite: true,
-    },
-    {
-      name: '会话覆盖关掉了 → 指向本会话设置',
-      scope: { globalEdit: true, override: false },
-      code: 'FS_EDIT_DENIED',
-      says: '本会话设置',
-      mustNotWrite: true,
-    },
-    {
-      name: '开关开着但浏览器没给写权限 → 指向"授权写入"',
+      /*
+       * 这一条替换了早先两条"编辑开关没开"的用例。
+       *
+       * 那个开关（全局默认 + 会话覆盖）已经删掉：**选中工作区 = 给了读写权**。
+       * 所以现在"写不进去"只剩两种原因，而且都指向磁盘/浏览器那一侧：
+       * 目录没了、或浏览器没放行 —— 用户要做的动作也因此只有一个（重新选择 / 授权）。
+       */
+      name: '浏览器没给写权限 → 指向"授权写入"',
       fs: { writeState: 'prompt' },
       code: 'FS_EDIT_DENIED',
       says: '授权写入',
@@ -202,9 +218,8 @@ describe('WorkspaceService.writeFile 的三道门', () => {
     });
   }
 
-  it('读权限只要求"目录可用"，不受编辑开关影响', async () => {
-    // 读默认可做，是刻意的设计：读不改变任何东西，用户已经选过这个目录
-    const { service, fake } = await setup({}, { globalEdit: false, override: false });
+  it('读文件只要求"目录可用"（不列目录、不碰写权限）', async () => {
+    const { service, fake } = await setup();
     const listedBefore = fake.listed.length;
 
     const result = await service.readFile('notes.txt');
@@ -254,23 +269,24 @@ describe('WorkspaceService 的路径沙箱', () => {
   });
 });
 
-describe('WorkspaceService 的装载与权限解析', () => {
+describe('WorkspaceService 的装载状态', () => {
+  /*
+   * `canWrite` 现在只有两个输入：目录还在吗、浏览器放行写吗。
+   * 早先还有第三个 —— "我们的编辑开关"（全局默认 + 会话覆盖），已随开关一起删掉。
+   */
   const canWriteCases: Array<{
     name: string;
     fs?: FakeFsOptions;
-    scope?: Parameters<typeof createScope>[0];
     canWrite: boolean;
   }> = [
-    { name: '目录 + 读 + 写 + 开关 全齐', canWrite: true },
-    { name: '开关关着（全局）', scope: { globalEdit: false }, canWrite: false },
-    { name: '会话覆盖关着', scope: { globalEdit: true, override: false }, canWrite: false },
+    { name: '目录 + 读 + 写 全齐', canWrite: true },
     { name: '浏览器没给写权限', fs: { writeState: 'prompt' }, canWrite: false },
     { name: '读取未授权', fs: { readState: 'denied' }, canWrite: false },
   ];
 
   for (const testCase of canWriteCases) {
     it(`canWrite：${testCase.name} → ${String(testCase.canWrite)}`, async () => {
-      const { service } = await setup(testCase.fs, testCase.scope);
+      const { service } = await setup(testCase.fs);
       expect(service.snapshot().canWrite).toBe(testCase.canWrite);
     });
   }
@@ -295,18 +311,14 @@ describe('WorkspaceService 的装载与权限解析', () => {
     expect(emits()).toBe(before);
   });
 
-  it('syncScope：权限变了会通知，令牌变了会重新装载', async () => {
-    const { service, emits, state, fake } = await setup();
-    const before = emits();
-
-    state.override = false; // 会话覆盖把它关掉
-    await service.syncScope();
-    expect(emits()).toBe(before + 1);
+  it('syncScope：令牌变了会重新装载（换句柄 + 重新列目录）', async () => {
+    const { service, state, fake } = await setup();
 
     state.root = 'fsw-另外的';
     const listedBefore = fake.listed.length;
     await service.syncScope();
-    // 令牌变了 → 走 load()：换句柄 + 重新列目录（授权到位时顺手刷新列表）
+
+    // 授权到位时顺手刷新列表
     expect(fake.listed.length).toBe(listedBefore + 1);
   });
 
@@ -322,16 +334,12 @@ describe('WorkspaceService 的装载与权限解析', () => {
     expect(setRootCalls).toEqual([]);
   });
 
-  it('selectDirectory：已允许编辑时一次就要 readwrite（事后补申请拿不到用户手势）', async () => {
-    const { service, fake, setRootCalls } = await setup({}, { globalEdit: true });
+  it('selectDirectory：**一律**要 readwrite（选中目录 = 给了读写权；事后补申请拿不到用户手势）', async () => {
+    const { service, fake, setRootCalls } = await setup();
 
     await service.selectDirectory();
     expect(fake.picked).toEqual(['readwrite']);
     expect(setRootCalls).toEqual([REF.id]);
-
-    const readOnly = await setup({}, { globalEdit: false });
-    await readOnly.service.selectDirectory();
-    expect(readOnly.fake.picked).toEqual(['read']);
   });
 
   it('authorizeWrite：没有目录时明确报错；有目录时更新写状态', async () => {

@@ -113,7 +113,7 @@ export function ModelProfiles() {
     <>
       <SettingRow
         label="模型配置"
-        help="每个配置包含端点、凭据、模型名与余额脚本。换服务商就整份一起换，不会漏改"
+        help="一套端点 + 凭据 + 模型名 + 余额脚本；换服务商整份切换"
       >
         <div className={styles.inlineField}>
           <Dropdown
@@ -155,7 +155,7 @@ export function ModelProfiles() {
 
       <SettingRow
         label="把 Key 保存到本地"
-        help="默认关闭：Key 只留在内存里，关掉应用要重填。打开后会写进本机数据库 —— 注意那是明文，能读到这台电脑文件的人就能看到它"
+        help="关：只留在内存里，重开要重填。开：明文写进本机数据库"
       >
         <Switch
           label="把 Key 保存到本地"
@@ -166,7 +166,7 @@ export function ModelProfiles() {
 
       <SettingRow
         label="连通性测试"
-        help="发一个最小请求（只要 1 个 token），同时验证地址、凭据、模型名三者都对。只查模型列表是不够的 —— 那验证不了模型名和对话权限"
+        help="发一个最小请求，一次验证地址、凭据与模型名"
       >
         {/*
           结果在**按钮左边**，与「余额脚本 → 测试脚本」保持一致：

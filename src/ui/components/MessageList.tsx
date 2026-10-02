@@ -61,6 +61,8 @@ export function MessageList() {
   const editMessage = useChatStore((s) => s.editMessage);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
   const regenerate = useChatStore((s) => s.regenerate);
+  const continueWriting = useChatStore((s) => s.continueWriting);
+  const continuableMessageId = useChatStore((s) => s.continuableMessageId);
   const selectVariant = useChatStore((s) => s.selectVariant);
   const locate = useChatStore((s) => s.locate);
   const searchHits = useChatStore((s) => s.searchHits);
@@ -86,6 +88,24 @@ export function MessageList() {
    * 不一致 = 用户真的动了滚动条，再按实际距离判断。
    */
   const pinnedTopRef = useRef(-1);
+
+  /**
+   * 贴到底，并记下"这是我们自己干的"
+   *
+   * 【为什么要读回 scrollTop】
+   * `scrollTop` 会被浏览器**钳**在 `scrollHeight − clientHeight` 以内，而
+   * `scrollHeight` 本身不是合法值。早先的写法是把 `scrollHeight` 存进
+   * pinnedTopRef —— 于是"这次滚动是我们发的"永远判不出来（两者差着正好一个
+   * clientHeight）。后果是：流式内容一长高，我们自己那次滚动就被当成
+   * "用户往上翻了"，自动跟随毫无征兆地停住。
+   * 赋值后读回真实值，这个判断才成立。
+   */
+  const pinBottom = () => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    scroller.scrollTop = scroller.scrollHeight;
+    pinnedTopRef.current = scroller.scrollTop;
+  };
 
   // useMemo 很关键：索引与路径都是新对象，不能在 selector 里现算（会触发无限重渲染）
   // 缓存版：同一棵树（消息树是不可变的）重复渲染只建一次索引 ——
@@ -145,12 +165,9 @@ export function MessageList() {
    * 平滑动画根本追不上目标。
    */
   const scrollToBottom = () => {
-    const scroller = scrollerRef.current;
-    if (!scroller) return;
     stickRef.current = true;
-    scroller.scrollTop = scroller.scrollHeight;
-    // 读回被钳过的真实值（理由见 pinToBottom）
-    pinnedTopRef.current = scroller.scrollTop;
+    // 贴底 + 读回被钳过的真实值（理由见 pinBottom）
+    pinBottom();
     setAtBottom(true);
     setAtTop(false);
   };
@@ -159,22 +176,6 @@ export function MessageList() {
     const scroller = scrollerRef.current;
     const column = columnRef.current;
     if (!scroller || !column) return;
-
-    /**
-     * 贴到底，并记下"这是我们自己干的"
-     *
-     * 【为什么要读回 scrollTop】
-     * `scrollTop` 会被浏览器**钳**在 `scrollHeight − clientHeight` 以内，而
-     * `scrollHeight` 本身不是合法值。早先的写法是把 `scrollHeight` 存进
-     * pinnedTopRef —— 于是"这次滚动是我们发的"永远判不出来（两者差着正好一个
-     * clientHeight）。后果是：流式内容一长高，我们自己那次滚动就被当成
-     * "用户往上翻了"，自动跟随毫无征兆地停住。
-     * 赋值后读回真实值，这个判断才成立。
-     */
-    const pinToBottom = () => {
-      scroller.scrollTop = scroller.scrollHeight;
-      pinnedTopRef.current = scroller.scrollTop;
-    };
 
     /**
      * 与滚动位置有关的界面状态
@@ -215,7 +216,7 @@ export function MessageList() {
      * 观察高度是唯一不会漏的做法。
      */
     const observer = new ResizeObserver(() => {
-      if (stickRef.current) pinToBottom();
+      if (stickRef.current) pinBottom();
       syncScrollState();
     });
     observer.observe(column);
@@ -244,6 +245,30 @@ export function MessageList() {
     // 留着不会报错，但会在同一段文字上留下"没有来源的高亮"
     clearSearchHighlight();
   }, [activeId]);
+
+  /**
+   * 发送之后**一定**回到最下面
+   *
+   * 【为什么不能只靠 ResizeObserver】
+   * 用户往上翻着读历史时，自动跟随会松开（这是对的，否则新内容会把他拽走）。
+   * 但"松开"不该一直生效：他接着在输入框里打字并**发送**，那条消息就落在
+   * 视口之外 —— 点了发送却停在半空，看谁都像是没发出去。
+   * 所以这里补一条规则：**刚发出去的那条必须看得见**。
+   *
+   * 判据是"激活路径的最后一条变成了用户消息"：这恰好等于"刚刚按下发送"，
+   * 而流式输出（最后一条是正在写的回复）与翻看历史都不会误触发。
+   */
+  const lastNode = path.length > 0 ? path[path.length - 1] : null;
+  const lastNodeId = lastNode?.id ?? null;
+  const lastIsUser = lastNode?.role === 'user';
+
+  useEffect(() => {
+    if (!lastIsUser) return;
+    stickRef.current = true;
+    pinBottom();
+    setAtBottom(true);
+    setAtTop(false);
+  }, [lastNodeId, lastIsUser]);
 
   /** 已经定位过的目标：同一次定位只做一遍，避免流式期间反复把视口拽走 */
   const locatedKeyRef = useRef<string | null>(null);
@@ -421,6 +446,12 @@ export function MessageList() {
               onRegenerate={regenerate}
               onSelectVariant={selectVariant}
               onCopy={copyToClipboard}
+              onContinue={continueWriting}
+              /*
+               * 传布尔而不是把 id 整个传下去：这是原始值，其余消息的 props 不变，
+               * 它们的 memo 不会被这一个按钮废掉（同 autoExpandReasoning 的理由）
+               */
+              canContinue={continuableMessageId === node.id}
             />
           );
         })}

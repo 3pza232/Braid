@@ -35,12 +35,6 @@
   white-space: nowrap;
 }
 
-.subtitle {
-  margin-top: 2px;
-  font-size: var(--text-xs);
-  color: var(--color-text-tertiary);
-}
-
 .close {
   display: grid;
   place-items: center;
@@ -73,6 +67,11 @@
   align-items: center;
   gap: var(--space-2);
   max-width: 100%;
+  /*
+   * 目录名可长可短，而它决定这一行会不会折行：给按钮留出可收缩的空间，
+   * 超长部分用省略号（真实的完整路径本来也拿不到，浏览器只给目录名）
+   */
+  min-width: 0;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
   border: 1px dashed var(--color-border-default);
@@ -92,6 +91,16 @@
   font-size: var(--text-sm);
   color: var(--color-text-primary);
   white-space: nowrap;
+}
+
+/*
+ * 与左边的目录框**等高**
+ *
+ * 并排的两个控件高度差个两三像素，看起来就是"没对齐"（用户提过）。这里不写死像素，
+ * 而是让按钮沿交叉轴撑满 —— 撑到的就是同一行里最高的那个（目录框）的高度。
+ */
+.alignedBtn {
+  align-self: stretch;
 }
 
 .miniBtn {

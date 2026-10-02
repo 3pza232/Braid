@@ -1,5 +1,4 @@
 import type { ErrorCode, Result } from '@shared/result';
-import type { ResolvedWorkspacePermission } from '@domain/value-objects/workspace';
 import type { FsEntry, HandleState, WorkspaceRef } from './host/FileSystemPort';
 
 /**
@@ -43,9 +42,8 @@ export interface WorkspaceSnapshot {
   writeState: HandleState;
   /** 能不能读：选中 + 已授权。读**不需要**额外开关 */
   canRead: boolean;
-  /** 能不能写：选中 + 浏览器已授予写入 + 我们的编辑开关已开。三者缺一不可 */
+  /** 能不能写：选中 + 浏览器已授予写入。**没有"我们的开关"这一层**（见 06-workspace.md） */
   canWrite: boolean;
-  permission: ResolvedWorkspacePermission;
   supported: boolean;
   unsupportedReason: string | null;
   /** 当前列出的目录项（未选目录时为空） */

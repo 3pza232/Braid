@@ -1,7 +1,11 @@
 import { useEffect, useMemo } from 'react';
 import { MAX_CONVERSATION_TITLE_LENGTH } from '@domain/entities/conversation';
 import { LAYER_LABEL, resolveConfig } from '@domain/rules/resolveConfig';
-import { SAMPLING_CONSTRAINTS, type SamplingField } from '@domain/value-objects/sampling';
+import {
+  MAX_OUTPUT_TOKENS_CEILING,
+  SAMPLING_CONSTRAINTS,
+  type SamplingField,
+} from '@domain/value-objects/sampling';
 import { estimateTokens } from '@domain/value-objects/usage';
 import { WRITING_MODES, type WritingMode } from '@domain/value-objects/writingMode';
 import {
@@ -22,6 +26,7 @@ import { DisplayToggles } from './DisplayToggles';
 import { useRolesStore } from '@ui/stores/rolesStore';
 import { useSettingsStore } from '@ui/stores/settingsStore';
 import { useModalFocus } from '@ui/hooks/useModalFocus';
+import { useOverlayDismiss } from '@ui/hooks/useOverlayDismiss';
 import { useWorkspaceStore } from '@ui/stores/workspaceStore';
 import { IconClose, IconFolder } from '@ui/components/Icons';
 import styles from './ConversationSettingsPanel.module.css';
@@ -47,7 +52,6 @@ export function ConversationSettingsPanel() {
   const selectWorkspace = useWorkspaceStore((s) => s.selectDirectory);
   const clearWorkspace = useWorkspaceStore((s) => s.clearDirectory);
   const authorizeWorkspace = useWorkspaceStore((s) => s.reauthorize);
-  const authorizeWrite = useWorkspaceStore((s) => s.authorizeWrite);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -81,24 +85,23 @@ export function ConversationSettingsPanel() {
   };
 
   const modalFocus = useModalFocus<HTMLElement>();
+  // 点遮罩关闭：**按下与松手都要在遮罩上**（拖出去松手不算，见 useOverlayDismiss）
+  const overlayDismiss = useOverlayDismiss(closePanel);
 
   return (
-    <div className={styles.overlay} onClick={closePanel} role="presentation">
+    <div className={styles.overlay} {...overlayDismiss} role="presentation">
       <aside
         ref={modalFocus.ref}
         className={styles.drawer}
         role="dialog"
         aria-modal="true"
-        aria-label="本会话设置"
+        aria-label="会话设置"
         tabIndex={-1}
         onKeyDown={modalFocus.onKeyDown}
-        onClick={(e) => e.stopPropagation()}
       >
         <header className={styles.header}>
-          <div>
-            <h2 className={styles.title}>本会话设置</h2>
-            <p className={styles.subtitle}>只影响这条对话 · 每行右侧标注当前值来自哪一层</p>
-          </div>
+          {/* 标题只留名字：副标题那句"只影响这条对话 · 每行右侧标注当前值来自哪一层"是给维护者看的，不是给用户的 */}
+          <h2 className={styles.title}>会话设置</h2>
           <button type="button" className={styles.close} onClick={closePanel} aria-label="关闭">
             <IconClose size={17} />
           </button>
@@ -117,26 +120,22 @@ export function ConversationSettingsPanel() {
                 placeholder="新对话"
               />
             </SettingRow>
-            <SettingRow
-              label="工作区目录"
-              help={
-                workspace.supported
-                  ? '本会话可以访问的本地目录。浏览器出于安全只提供目录句柄、不提供真实路径，所以这里显示的是目录名'
-                  : (workspace.unsupportedReason ?? '当前环境不支持访问本地目录')
-              }
-              hint={
-                workspace.root === null
-                  ? undefined
-                  : workspaceNeedsGrant
-                    ? '需要重新授权'
-                    : `已列出 ${workspace.entries.length} 项`
-              }
-            >
+            {/*
+              「选中目录 = 允许读写」，所以这里没有"允许编辑"开关
+
+              早先它是两行：一个开关（全局默认 + 本会话覆盖）+ 一个「授权写入」。
+              三层里任何一层没对上，用户看到的都是"我明明选了目录还是写不了" ——
+              而界面上看不出是哪一层。现在只剩这一行：目录 + 需要时重新授权 + 移除。
+
+              `stacked`：控件是"目录名 + 重新授权 + 移除"，目录名可长可短，
+              并排时横向空间给不够就会折行、行高突变（用户反馈过"布局乱了"）。
+            */}
+            <SettingRow stacked label="工作区目录" help="本会话可以访问的本地目录；选中它 = 允许 AI 在这里读写">
               <div className={styles.inline}>
                 <Tooltip
                   label={
                     workspaceNeedsGrant
-                      ? '浏览器重启后，已保存的目录需要你点一下重新授权'
+                      ? '目录授权已失效。点一下重新授权，或重新选择目录'
                       : '选择本会话的工作区目录'
                   }
                 >
@@ -153,80 +152,20 @@ export function ConversationSettingsPanel() {
                 {workspaceNeedsGrant ? (
                   <button
                     type="button"
-                    className={styles.miniBtn}
+                    className={`${styles.miniBtn} ${styles.alignedBtn}`}
                     onClick={() => void authorizeWorkspace()}
                   >
                     重新授权
                   </button>
                 ) : null}
                 {workspace.root ? (
-                  <Tooltip label="清除工作区并丢弃已保存的目录授权">
+                  <Tooltip label="只让 Braid 不再引用这个目录，不会动里面的文件">
                     <button
                       type="button"
-                      className={styles.miniBtn}
+                      className={`${styles.miniBtn} ${styles.alignedBtn}`}
                       onClick={() => void clearWorkspace()}
                     >
-                      清除
-                    </button>
-                  </Tooltip>
-                ) : null}
-              </div>
-            </SettingRow>
-            <SettingRow
-              label="允许编辑工作区文件"
-              help="关闭时 AI 只能读取工作区文件；它一旦尝试编辑，会收到「无权限编辑文件」并向你弹出警报。开启后不再逐次询问即可写入"
-              hint={
-                !workspace.permission.allowEdit
-                  ? workspace.permission.source === 'conversation'
-                    ? '本会话禁止'
-                    : '继承全局'
-                  : workspace.writeState === 'granted'
-                    ? workspace.permission.source === 'conversation'
-                      ? '本会话覆盖'
-                      : '继承全局'
-                    : '缺少浏览器写入授权'
-              }
-            >
-              <div className={styles.inline}>
-                <Switch
-                  label="允许编辑工作区文件"
-                  checked={workspace.permission.allowEdit}
-                  onChange={(value) => {
-                    /*
-                     * 打开开关时**先申请浏览器的写入授权**，拿到才真的打开
-                     *
-                     * 顺序不能反：浏览器只在用户手势里给权限，而这一次点击
-                     * 正是那个手势。先开开关、事后补申请，申请会因为"没有手势"
-                     * 失败 —— 用户看到的就是"界面写着已开启，实际一个字节都写不进去"。
-                     */
-                    if (!value) {
-                      patchConversation({ allowWorkspaceEdit: false });
-                      return;
-                    }
-                    void authorizeWrite().then((granted) => {
-                      if (granted) patchConversation({ allowWorkspaceEdit: true });
-                    });
-                  }}
-                />
-                {workspace.permission.allowEdit && workspace.writeState !== 'granted' ? (
-                  <Tooltip label="还没授予这个目录的写权限。浏览器只认点击动作，只能由你点一次">
-                    <button
-                      type="button"
-                      className={styles.miniBtn}
-                      onClick={() => void authorizeWrite()}
-                    >
-                      授权写入
-                    </button>
-                  </Tooltip>
-                ) : null}
-                {workspace.permission.source === 'conversation' ? (
-                  <Tooltip label="删掉本会话的覆盖，改回跟随全局设置">
-                    <button
-                      type="button"
-                      className={styles.miniBtn}
-                      onClick={() => patchConversation({ allowWorkspaceEdit: null })}
-                    >
-                      改回继承
+                      移除引用
                     </button>
                   </Tooltip>
                 ) : null}
@@ -236,7 +175,7 @@ export function ConversationSettingsPanel() {
 
           <SettingGroup
             title="角色实例"
-            help="会话在创建时把角色预设快照成一份「实例」，之后互不影响：改角色预设不会串改历史对话。想换角色请新建对话"
+            help="创建会话时从角色预设快照一份，之后互不影响；换角色请新建对话"
           >
             <SettingRow label="使用中的角色" hint={instance ? '创建时的快照' : '未使用角色'}>
               <div className={styles.inline}>
@@ -274,7 +213,7 @@ export function ConversationSettingsPanel() {
 
           <SettingGroup
             title="称谓"
-            help="这条对话里 AI 叫什么、怎么称呼你。留空则逐层向上继承（角色实例 → 全局）"
+            help="这条对话里 AI 与你的称呼；留空 = 继承"
           >
             <SettingRow
               label="AI 的名字"
@@ -360,7 +299,7 @@ export function ConversationSettingsPanel() {
 
             <SettingRow
               label="续写档位"
-              help="普通 = 单次生成；短/中/长 = 自动续写直到达到字数下限"
+              help="普通 = 一次写完；短/中/长 = 自动续写到字数下限"
               hint={LAYER_LABEL[config.sources.writingMode]}
             >
               <Segmented
@@ -410,7 +349,7 @@ export function ConversationSettingsPanel() {
             ) : null}
             <SettingRow
               label="保留最近原文"
-              help="压缩时至少保留最近多少轮的完整原文。写小说可以设大一些（保住近处的情节与语气），问代码设小一些更省上下文。留空 = 继承全局"
+              help="压缩时至少保留最近多少轮的原文；留空 = 继承全局"
               hint={LAYER_LABEL[config.sources.keepRecentTurns]}
             >
               <div className={styles.inline}>
@@ -426,7 +365,7 @@ export function ConversationSettingsPanel() {
                 <NumberField
                   value={config.keepRecentTurns}
                   min={1}
-                  max={200}
+                  max={1000}
                   step={1}
                   width={130}
                   suffix="轮"
@@ -466,7 +405,7 @@ export function ConversationSettingsPanel() {
               <NumberField
                 value={conversation.params.maxTokens ?? settings.sampling.maxTokens ?? 8192}
                 min={256}
-                max={65536}
+                max={MAX_OUTPUT_TOKENS_CEILING}
                 step={256}
                 width={130}
                 suffix="tok"
@@ -498,7 +437,6 @@ export function ConversationSettingsPanel() {
                     continuationPrompt: conversation.continuationPrompt,
                     assistantName: conversation.assistantName,
                     userName: conversation.userName,
-                    allowWorkspaceEdit: conversation.allowWorkspaceEdit,
                   };
                   patchConversation({
                     systemPrompt: null,
@@ -510,8 +448,7 @@ export function ConversationSettingsPanel() {
                     continuationPrompt: null,
                     assistantName: null,
                     userName: null,
-                    // 工作区目录本身不是"覆盖"，所以不清除；只把编辑权限交回全局
-                    allowWorkspaceEdit: null,
+                    // 工作区目录不是"覆盖"，所以不清除（它也不是权限开关了）
                   });
                   useUiStore.getState().pushNotice({
                     tone: 'alert',

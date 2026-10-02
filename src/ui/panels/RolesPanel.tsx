@@ -3,7 +3,7 @@ import { MAX_ROLE_NAME_LENGTH, type RolePreset } from '@domain/entities/rolePres
 import { matchesQuery } from '@domain/rules/fuzzyMatch';
 import { findUnknownMacros } from '@domain/rules/macroResolver';
 import { activeProfileOf } from '@domain/value-objects/appSettings';
-import { SAMPLING_CONSTRAINTS } from '@domain/value-objects/sampling';
+import { MAX_OUTPUT_TOKENS_CEILING, SAMPLING_CONSTRAINTS } from '@domain/value-objects/sampling';
 import { WRITING_MODES, type WritingMode } from '@domain/value-objects/writingMode';
 import {
   DragHandle,
@@ -21,6 +21,7 @@ import {
 import { useRolesStore } from '@ui/stores/rolesStore';
 import { useSettingsStore } from '@ui/stores/settingsStore';
 import { useModalFocus } from '@ui/hooks/useModalFocus';
+import { useOverlayDismiss } from '@ui/hooks/useOverlayDismiss';
 import { useUiStore } from '@ui/stores/uiStore';
 import { Avatar } from '@ui/components/Avatar';
 import { AvatarEditor } from '@ui/components/AvatarEditor';
@@ -211,9 +212,11 @@ export function RolesPanel() {
   };
 
   const modalFocus = useModalFocus<HTMLElement>();
+  // 点遮罩关闭：**按下与松手都要在遮罩上**（拖出去松手不算，见 useOverlayDismiss）
+  const overlayDismiss = useOverlayDismiss(closePanel);
 
   return (
-    <div className={styles.overlay} onClick={closePanel} role="presentation">
+    <div className={styles.overlay} {...overlayDismiss} role="presentation">
       <section
         ref={modalFocus.ref}
         className={styles.panel}
@@ -222,7 +225,6 @@ export function RolesPanel() {
         aria-label="角色预设"
         tabIndex={-1}
         onKeyDown={modalFocus.onKeyDown}
-        onClick={(e) => e.stopPropagation()}
       >
         <header className={styles.header}>
           <h2 className={styles.title}>角色预设</h2>
@@ -430,7 +432,7 @@ export function RolesPanel() {
 
                 <SettingGroup
                   title="系统提示词"
-                  help="这是角色的核心。支持变量：{{user}} {{char}} {{writing_mode}}，以及你在下方自定义的变量"
+                  help="角色的核心；支持 {{user}} {{char}} 等变量"
                 >
                   <SettingRow label="预设词" stacked>
                     <TextArea
@@ -490,7 +492,7 @@ export function RolesPanel() {
                 <SettingGroup title="模型与参数">
                   <SettingRow
                     label="模型名"
-                    help="完全自由填写，Braid 不做任何校验，原样作为请求的 model 字段。留空 = 继承全局设置"
+                    help="原样作为请求的 model 字段；留空 = 继承全局"
                     hint={editing.model ? '已覆盖' : `继承：${(activeProfileOf(settings)?.model ?? '') || '未设置'}`}
                   >
                     <TextField
@@ -521,7 +523,7 @@ export function RolesPanel() {
                     <NumberField
                       value={editing.params.maxTokens ?? settings.sampling.maxTokens ?? 8192}
                       min={256}
-                      max={65536}
+                      max={MAX_OUTPUT_TOKENS_CEILING}
                       step={256}
                       suffix="tok"
                       width={140}
@@ -541,7 +543,7 @@ export function RolesPanel() {
 
                 <SettingGroup
                   title="变量"
-                  help="在预设词里用 {{键名}} 引用。内置变量有默认值（留空即继承）；在这里填值就是覆盖它，清空则回到默认。自定义变量的优先级高于内置"
+                  help="在预设词里用 {{键名}} 引用；填值即覆盖，清空回到默认"
                 >
                   {/*
                     内置变量也列出来，而且**可改可清空**
@@ -634,7 +636,7 @@ export function RolesPanel() {
                       复制
                     </button>
                   </Tooltip>
-                  <Tooltip label="导出为 JSON 并复制到剪贴板（不含密钥）">
+                  <Tooltip label="导出为 JSON 并复制到剪贴板，不含密钥">
                     <button type="button" className={styles.ghostSm} onClick={handleExport}>
                       导出
                     </button>
@@ -710,7 +712,7 @@ export function RolesPanel() {
                         </div>
                       ) : null}
                     </div>
-                    <Tooltip label="用这个角色开一场新对话（快照成实例，之后改这里不影响它）">
+                    <Tooltip label="用这个角色开新对话；之后改这里不影响它">
                       <button
                         type="button"
                         className={styles.primarySm}

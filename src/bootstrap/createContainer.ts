@@ -96,8 +96,6 @@ export function createContainer(options: ContainerOptions = {}): AppContainer {
 
   const workspace = new WorkspaceService(createFsaFileSystemPort(), {
     root: () => chat.snapshot().conversation.workspaceRoot,
-    override: () => chat.snapshot().conversation.allowWorkspaceEdit,
-    global: () => settings.get().workspace,
     setRoot: async (root) => {
       await chat.updateActive({ workspaceRoot: root });
     },
