@@ -242,7 +242,7 @@ function validate(target: ProviderConnection & { model: string }): AppError | nu
   if (!resolveApiKey(target)) {
     return appError(
       'UPSTREAM_UNAUTHORIZED',
-      '没有可用的 API Key。浏览器读不到系统环境变量，请直接填入 Key',
+      '还没有填 API Key。请在「模型配置」里填一个再试',
     );
   }
   return null;
@@ -251,24 +251,13 @@ function validate(target: ProviderConnection & { model: string }): AppError | nu
 /**
  * 解析凭据
  *
- * 优先级：**手填 Key > 构建期注入 > 空**
- *
- * 必须让用户知道的事实：**浏览器与桌面壳的渲染进程都读不到系统环境变量**，
- * 所以桌面端也无法直接读 `DEEPSEEK_API_KEY`。"环境变量名"的实际作用是在**构建期**
- * 把同名（或 `VITE_` 前缀）变量注入进来；要在运行期换 Key，请直接填值。
+ * **只认手填的 Key**。这里刻意**没有**"从环境变量读"这条路，别再把它加回来：
+ *  - 浏览器与桌面壳的渲染进程都读不到系统环境变量；
+ *  - 原来的"构建期注入"在**发布形态**（预构建好的 exe）里没有任何人能提供那个环境 ——
+ *    它只会在用户那里静默失效，却让人以为自己配对了，然后花一晚上找一个不存在的 bug。
  */
 function resolveApiKey(config: ProviderConnection): string {
-  const manual = config.apiKey.trim();
-  if (manual) return manual;
-
-  const name = config.envVarName.trim();
-  if (!name) return '';
-
-  // 必须写成 `import.meta.env` 这个字面量：Vite 按字面文本替换，
-  // 拆成中间变量再取值会在构建后什么都拿不到。
-  const env: Record<string, unknown> = import.meta.env ?? {};
-  const value = env[name] ?? env[`VITE_${name}`];
-  return typeof value === 'string' ? value.trim() : '';
+  return config.apiKey.trim();
 }
 
 function parseExtraBody(text: string): Record<string, unknown> | null {

@@ -239,7 +239,6 @@ export function createContextManager(deps: ContextManagerDeps): ContextManager {
       const result = await deps.provider.complete({
         baseUrl: config.baseUrl,
         apiKey: config.apiKey,
-        envVarName: config.envVarName,
         requestTimeoutMs: config.requestTimeoutMs,
         extraBodyJson: config.extraBody,
         model: config.model,

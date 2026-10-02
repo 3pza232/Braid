@@ -83,21 +83,8 @@ export function ModelSection({ settings, update }: ModelSectionProps) {
           />
         </SettingRow>
         <SettingRow
-          label="环境变量名"
-          help="启动时会去系统环境变量里找这个名字作为 API Key。不同用户命名习惯不同，所以可以自由修改；留空则不读环境变量"
-        >
-          <TextField
-            mono
-            width={260}
-            autoWidth
-            value={profileOf(settings).envVarName}
-            onChange={(value) => update(patchProfile(settings, { envVarName: value }))}
-            placeholder="例如：MY_LLM_API_KEY"
-          />
-        </SettingRow>
-        <SettingRow
           label="API Key"
-          help="直接填写则优先生效（优先级：手填 > 系统环境变量 > 构建期注入）。出于安全考虑仅驻留内存，不写入磁盘、不进日志"
+          help="直接填在这里。出于安全考虑默认只驻留内存 —— 不写入磁盘、不进日志；要长期保存请打开下面的「把 Key 保存到本地」（明文）"
         >
           <div className={styles.inlineField}>
             <TextField
@@ -107,7 +94,7 @@ export function ModelSection({ settings, update }: ModelSectionProps) {
               width={240}
               value={profileOf(settings).apiKey}
               onChange={(value) => update(patchProfile(settings, { apiKey: value }))}
-              placeholder="留空则用环境变量"
+              placeholder="粘贴你的 API Key"
             />
             <button
               type="button"

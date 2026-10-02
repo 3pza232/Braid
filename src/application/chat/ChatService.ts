@@ -830,7 +830,6 @@ export class ChatService implements ChatApi {
           connection: {
             baseUrl: config.baseUrl,
             apiKey: config.apiKey,
-            envVarName: config.envVarName,
             requestTimeoutMs: config.requestTimeoutMs,
             extraBodyJson: config.extraBody,
             model: config.model,

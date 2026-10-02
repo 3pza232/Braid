@@ -40,7 +40,6 @@ export interface ModelProfile {
   /** 模型名，原样作为请求的 model 字段 */
   model: string;
   baseUrl: string;
-  envVarName: string;
   /** 手填的 Key。是否落盘由 persistApiKey 决定 */
   apiKey: string;
   /**
@@ -48,7 +47,7 @@ export interface ModelProfile {
    *
    * 默认 **false**（只在内存驻留，关掉应用就要重填）。
    * 打开后写入本机数据库 —— 注意：**是明文**，能读到这台电脑文件的人就能看到它。
-   * 桌面端建议关掉用环境变量，浏览器端没有环境变量可用才打开。
+   * 默认关着，等用户自己确认"这台机器只有我用"。
    */
   persistApiKey: boolean;
   requestTimeoutMs: number;
@@ -261,7 +260,6 @@ export function createModelProfile(init: Partial<ModelProfile> = {}): ModelProfi
     name: init.name ?? '新配置',
     model: init.model ?? '',
     baseUrl: init.baseUrl ?? '',
-    envVarName: init.envVarName ?? '',
     apiKey: init.apiKey ?? '',
     persistApiKey: init.persistApiKey ?? false,
     requestTimeoutMs: init.requestTimeoutMs ?? 120_000,

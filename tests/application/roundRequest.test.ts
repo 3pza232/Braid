@@ -17,7 +17,6 @@ import type { ProviderMessage, ProviderTool } from '@ports/LLMProvider';
 const connection = {
   baseUrl: 'https://example.test/v1',
   apiKey: 'k',
-  envVarName: '',
   requestTimeoutMs: 5000,
   extraBodyJson: '',
   model: 'test-model',

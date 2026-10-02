@@ -42,10 +42,26 @@ export function createScriptBalanceProvider(): BalanceProvider {
         const factory = new Function(`"use strict"; return (${substituted});`);
         parsed = factory() as BalanceScript;
       } catch (e) {
+        /*
+         * 两种失败必须分开说，否则会把用户送去查错地方
+         *
+         *  - `SyntaxError` = 脚本本身写错了 → "检查括号与引号"是对的；
+         *  - 其它异常 = **环境拒绝了执行**（最典型：内容安全策略里没有 `'unsafe-eval'`）。
+         *    这种情况脚本一个字都没写错，说"检查括号"就是误导 ——
+         *    用户会对着一个完全正确的脚本反复找一晚上括号。
+         *
+         * 这个坑真的发生过：产物 CSP 少了 `'unsafe-eval'`，而浏览器里开发没有 CSP，
+         * 于是"浏览器里好好的、装进 exe 就报错"。那条文案直接把人引偏了。
+         */
+        const detail = e instanceof Error ? e.message : String(e);
         return err(
-          appError('VALIDATION_ERROR', '余额脚本无法解析，请检查括号与引号是否配对', {
-            detail: e instanceof Error ? e.message : String(e),
-          }),
+          appError(
+            'VALIDATION_ERROR',
+            e instanceof SyntaxError
+              ? '余额脚本无法解析，请检查括号与引号是否配对'
+              : `当前环境拒绝执行脚本（内容安全策略）：${detail}`,
+            { detail },
+          ),
         );
       }
 

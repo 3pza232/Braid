@@ -21,7 +21,6 @@ function installFetch(frames: string[]): void {
 const connection = {
   baseUrl: 'https://example.test/v1',
   apiKey: 'k',
-  envVarName: '',
   requestTimeoutMs: 5000,
   extraBodyJson: '',
 };

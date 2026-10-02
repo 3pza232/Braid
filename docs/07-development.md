@@ -186,8 +186,8 @@ npm run build    # verify + 构建
   有东西**正在监视工作区的新文件**（IDE 的文件索引 / 杀软扫描刚解压出的 Electron）持有句柄，
   重命名就被拒。解法是把输出挪到工作区外，再把 exe 拷回来：
   ```bash
-  npx electron-builder --win portable --config.directories.output="$TEMP/braid-pack"
-  # 然后把 $TEMP/braid-pack/Braid-<版本>-portable.exe 拷进 release/
+  npx electron-builder --win nsis --config.directories.output="$TEMP/braid-pack"
+  # 然后把 $TEMP/braid-pack/Braid-<版本>-setup.exe 拷进 release/
   ```
 - **`trash-failed` / "Some operations were aborted"** —— 本机的 `fs.rm` 被一个"安全删除"垫片
   接管了（通过 `NODE_OPTIONS=--require ...node-language-shim.cjs` 注入），它会拦下打包工具
@@ -199,8 +199,9 @@ npm run build    # verify + 构建
 
 另外两条：
 
-- **两种产物**：`npm run dist:win` 出安装版（NSIS，`Braid-<版本>-setup.exe`：有向导、
-  可改安装目录、带开始菜单与卸载项）；`npm run dist:win:portable` 出免安装单文件。
+- **只出安装版**：`npm run dist:win` 出 `Braid-<版本>-setup.exe`（NSIS：有向导、可改安装目录、
+  带开始菜单与卸载项）。**不做便携版** —— 多一份上百 MB 的产物，还多一条"数据目录在哪"的
+  分支要维护，用不上就不留。
   `nsis.deleteAppDataOnUninstall` **必须是 false** —— 应用数据在 `%APPDATA%\Braid`
   （OPFS 上的 SQLite，用户的全部会话），卸载时删掉它是最不可挽回的一类事故；
 - 从 GitHub 取打包组件偶尔会 `ETIMEDOUT`（瞬时）：**重试即可**。若卡在证书探测上，

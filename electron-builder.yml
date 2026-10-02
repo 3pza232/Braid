@@ -1,7 +1,12 @@
 # Windows 打包配置（electron-builder）
 #
-# 主产物是**安装版**（NSIS）：有安装向导、能改安装目录、带开始菜单与卸载项。
-# 免安装的便携版留在 `npm run dist:win:portable`（`--win portable` 覆盖这里的 target）。
+# 【范围：只做 Windows 安装版】两点都是刻意的：
+#  - 没有 mac / linux 的 target —— 项目只支持一个平台。应用本体是网页，原则上能跑在别的
+#    系统上；真要做的时候在这里加 target 即可，其余配置（files / 主题目录 / 自检）都不用动；
+#  - 没有便携版 —— 只出安装包。多一份上百 MB 的产物，还多一条"数据目录在哪"的分支
+#    （便携版会把自己解到临时目录）要维护，用不上就不留。
+#
+# 产物是**安装版**（NSIS）：有安装向导、能改安装目录、带开始菜单与卸载项。
 appId: com.braid.app
 productName: Braid
 copyright: Braid
@@ -42,6 +47,3 @@ nsis:
   # 卸载时删掉它等于把用户的对话一并抹了 —— 那是最不可挽回的一类事故。
   deleteAppDataOnUninstall: false
 
-# 便携版（`npm run dist:win:portable`）用；它不写注册表，数据目录同上
-portable:
-  artifactName: Braid-${version}-portable.exe

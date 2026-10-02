@@ -38,13 +38,14 @@ const SMOKE = process.argv.includes('--smoke');
  * 放一个 JSON 进去、重启就能在设置里选到；删掉文件就真的没了。
  * 它由这个进程端出去（渲染进程没有 Node 权限），应用启动时按 `/_external-themes` 取。
  *
- * 【便携版为什么要看环境变量】便携 exe 会把自己解到临时目录再跑，
- * `app.getPath('exe')` 指的是那份临时副本 —— 往那儿写文件，用户关掉就没了。
- * `PORTABLE_EXECUTABLE_DIR` 才是"exe 实际所在的目录"。
+ * 【位置】打包后：**exe 同级的 `themes/`**（安装版装在哪，它就在哪）；
+ * 开发态：直接用仓库里那份，开发者改的就是它。
+ * 注：早先还支持便携版（那时要看 `PORTABLE_EXECUTABLE_DIR`，因为便携 exe 会把自己
+ * 解到临时目录再跑）。现在只出安装版，那条分支就去掉了 —— 真要加回便携版记得一并处理。
  */
 const THEME_DIR = app.isPackaged
-  ? path.join(process.env.PORTABLE_EXECUTABLE_DIR ?? path.dirname(app.getPath('exe')), 'themes')
-  : // 开发态（`npm run desktop`）：直接用仓库里那份，开发者改的就是它
+  ? path.join(path.dirname(app.getPath('exe')), 'themes')
+  : // 开发态（`npm run desktop`）
     path.join(__dirname, '..', 'themes');
 const THEME_PREFIX = '/_external-themes';
 /** 只放行长得像主题文件的名字：这是唯一能读到磁盘任意位置的口子，必须窄 */
@@ -259,6 +260,22 @@ async function smokeTest(window) {
   if (probe.elements < 20) problems.push('首屏几乎是空的（React 没挂载或崩了）');
   if (!probe.opfs) problems.push('OPFS 不可用 —— 数据不会落盘（这正是必须避免的那件事）');
   if (!probe.secure) problems.push('不是安全上下文');
+
+  /*
+   * CSP 里必须允许 eval：**余额脚本功能就是"执行用户写的 JS"**（`new Function`）。
+   *
+   * 少这一项时，CSP 只在**产物**里生效 —— 浏览器里开发一切正常，装进 exe 就坏，
+   * 而且坏在"用户配置里的一个功能"上（首屏照常渲染，看不出来）。这个坑真的踩过一次，
+   * 所以这里实际执行一次 `new Function`，而不是只看 CSP 文本里有没有那串字。
+   */
+  const evalResult = await window.webContents.executeJavaScript(
+    `(() => { try { return new Function('return 1')() } catch (e) { return 'BLOCKED: ' + String(e) } })()`,
+  );
+  if (evalResult !== 1) {
+    problems.push(`CSP 不允许 eval（余额脚本会失效）：${evalResult}`);
+  } else {
+    console.log('[smoke] eval 可用（余额脚本能执行）✓');
+  }
 
   for (const problem of problems) console.error(`[smoke] ✗ ${problem}`);
   console.log(problems.length === 0 ? '[smoke] ✅ 通过' : `[smoke] ❌ ${problems.length} 项问题`);

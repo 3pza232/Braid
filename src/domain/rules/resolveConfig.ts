@@ -42,7 +42,6 @@ export interface ResolvedConfig {
   profile: ModelProfile | null;
   baseUrl: string;
   apiKey: string;
-  envVarName: string;
   requestTimeoutMs: number;
   extraBody: string;
 
@@ -196,7 +195,6 @@ export function resolveConfig(settings: AppSettings, conversation: Conversation 
     profile,
     baseUrl: profile?.baseUrl ?? '',
     apiKey: profile?.apiKey ?? '',
-    envVarName: profile?.envVarName ?? '',
     requestTimeoutMs: profile?.requestTimeoutMs ?? 120_000,
     extraBody: profile?.extraBody ?? '',
     params,

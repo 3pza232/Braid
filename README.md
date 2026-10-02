@@ -19,10 +19,13 @@
 
 ## 快速开始
 
+需要 **Node 23.6 以上**：`check:sql` 会用 `node:sqlite` 真跑一遍迁移、并用类型擦除直接读 `.ts`，
+版本不够时那道门禁会**按设计直接变红**，而不是给一个虚假的绿灯（本机开发用的是 Node 24）。
+
 ```bash
 npm install
 npm run dev      # http://localhost:5173 —— 端口被占会直接失败，不会偷偷换端口
-npm run verify   # 提交前必跑：类型 + 分层 + 样式 + 死代码 + SQL + 测试
+npm run verify   # 提交前必跑：类型 + 分层 + 样式 + 死代码 + SQL + 文档引用 + 测试
 npm run build    # = verify + vite build
 ```
 
@@ -41,11 +44,10 @@ npm run build    # = verify + vite build
 渲染进程拿不到任何 Node 能力。
 
 ```bash
-npm run build              # 先产出 dist/
-npm run desktop            # 跑本地 dist
-npm run desktop:smoke      # 自检：加载 → 探首屏与 OPFS → 验主题目录 → 打印结果 → 退出（0/1）
-npm run dist:win           # 安装版：release/Braid-<版本>-setup.exe（有向导，可改安装目录）
-npm run dist:win:portable  # 免安装单文件：release/Braid-<版本>-portable.exe
+npm run build          # 先产出 dist/
+npm run desktop        # 跑本地 dist
+npm run desktop:smoke  # 自检：加载 → 探首屏与 OPFS → 验主题目录 → 打印结果 → 退出（0/1）
+npm run dist:win       # 出安装包：release/Braid-<版本>-setup.exe（有向导，可改安装目录）
 ```
 
 自检查的是四件**会让人亏数据或白干**的事：首屏有没有真的渲染出内容、OPFS 有没有可用、

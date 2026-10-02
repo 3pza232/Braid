@@ -96,7 +96,6 @@ export function ModelProfiles() {
       {
         baseUrl: profile.baseUrl,
         apiKey: profile.apiKey,
-        envVarName: profile.envVarName,
         requestTimeoutMs: profile.requestTimeoutMs,
         extraBodyJson: profile.extraBody,
       },
@@ -156,7 +155,7 @@ export function ModelProfiles() {
 
       <SettingRow
         label="把 Key 保存到本地"
-        help="默认关闭：Key 只留在内存里，关掉应用要重填。打开后会写进本机数据库 —— 注意那是明文，能读到这台电脑文件的人就能看到它。浏览器端没有系统环境变量可用，通常需要打开"
+        help="默认关闭：Key 只留在内存里，关掉应用要重填。打开后会写进本机数据库 —— 注意那是明文，能读到这台电脑文件的人就能看到它"
       >
         <Switch
           label="把 Key 保存到本地"

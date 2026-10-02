@@ -29,7 +29,6 @@ function installFetch(handler: () => Promise<Response> | Response): void {
 const request: ChatRequest = {
   baseUrl: 'https://example.test/v1',
   apiKey: 'k',
-  envVarName: '',
   requestTimeoutMs: 5000,
   extraBodyJson: '',
   model: 'test-model',

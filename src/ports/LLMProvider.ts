@@ -46,9 +46,8 @@ export interface ProviderTool {
  */
 export interface ProviderConnection {
   baseUrl: string;
+  /** 手填的 Key。**没有从环境变量读的路**（见 openAICompatProvider 的 resolveApiKey） */
   apiKey: string;
-  /** 环境变量名；浏览器读不到系统环境变量，这里实际用于构建期注入 */
-  envVarName: string;
   requestTimeoutMs: number;
   /** 用户手写的额外请求体字段（JSON 文本） */
   extraBodyJson: string;
@@ -81,7 +80,6 @@ export interface ProbeResult {
 export interface CompleteRequest {
   baseUrl: string;
   apiKey: string;
-  envVarName: string;
   requestTimeoutMs: number;
   extraBodyJson: string;
   model: string;

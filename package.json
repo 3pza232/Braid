@@ -12,7 +12,6 @@
     "desktop": "electron .",
     "desktop:smoke": "electron . --smoke",
     "dist:win": "npm run build && electron-builder --win nsis",
-    "dist:win:portable": "npm run build && electron-builder --win portable",
     "typecheck": "tsc --noEmit",
     "check:layers": "node scripts/check-layers.mjs",
     "check:dead": "node scripts/check-dead.mjs",

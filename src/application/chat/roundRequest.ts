@@ -44,7 +44,7 @@ export interface RoundRequestInput {
   /** 连接与模型信息（来自**解析后**的配置：会话 → 角色 → 全局当前） */
   connection: Pick<
     ChatRequest,
-    'baseUrl' | 'apiKey' | 'envVarName' | 'requestTimeoutMs' | 'extraBodyJson' | 'model'
+    'baseUrl' | 'apiKey' | 'requestTimeoutMs' | 'extraBodyJson' | 'model'
   >;
   signal: AbortSignal;
 }

@@ -21,19 +21,26 @@ const version = (JSON.parse(readFileSync(r('./package.json'), 'utf8')) as { vers
  * 同一份策略会把开发流程自己挡死（改了样式不生效、控制台一堆违规）。
  * 产物是静态的，没有这些需求。
  *
- * 【两条不能省的项】
+ * 【三项不能省的】
  *  - `'unsafe-inline'`：`index.html` 里那段**防 FOUC 的内联脚本**与内联样式；
+ *  - `'unsafe-eval'`：**余额脚本功能就是"执行用户写的 JS"**（`new Function`，
+ *    见 adapters/balance/scriptBalanceProvider.ts）。少这一项时，CSP 只在**产物**里生效，
+ *    于是"浏览器里好好的、装进 exe 就报错" —— 这个坑已经踩过一次，别再删它；
  *  - `'wasm-unsafe-eval'`：wa-sqlite 要编译 wasm，少这一项 SQLite 直接起不来。
- * 其余刻意收紧：不允许任何外部脚本、不允许 `<object>`、不允许注入 `<base>`。
- * `connect-src` 必须放开 http/https —— 模型端点与余额接口都是用户自己填的任意地址。
  *
- * 【怎么确认它没把应用挡坏】`npm run desktop:smoke` 会把渲染进程的报错（含 CSP 违规）
- * 带出来，并检查首屏与 OPFS。
+ * 允许了 inline 与 eval，脚本层面的防护就只剩"不允许加载外部脚本"这类粗线；
+ * 但对这个应用是合理的取舍：它**本来就要跑用户自己写的余额脚本**，
+ * 而那部分能力是功能，不是漏洞。剩下的项仍然值得留着：不允许任何外部脚本源、
+ * 不允许 `<object>`、不允许注入 `<base>`、`img-src` 收到 self/data/blob/https、
+ * `connect-src` 放开 http/https（模型端点与余额接口都是用户自己填的任意地址）。
+ *
+ * 【怎么确认它没把应用挡坏】`npm run desktop:smoke` 会：把渲染进程的报错（含 CSP 违规）
+ * 带出来、探首屏与 OPFS、验主题目录，并**实际执行一次 `new Function`** 确认 eval 没被拦。
  */
 function contentSecurityPolicy(): Plugin {
   const policy = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
