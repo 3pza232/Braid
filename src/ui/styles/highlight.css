@@ -1,0 +1,88 @@
+/*
+ * 代码高亮的令牌配色（**全局样式，不是 CSS Module**）
+ *
+ * 【为什么必须放在全局】
+ * 这些类名是 highlight.js 在**运行时**往 DOM 上打的（`hljs-keyword` 之类），
+ * 而不是由我们的 JSX 引用的。CSS Module 会把类名哈希成
+ * `.Markdown_hljs-keyword__x3f1`，于是选择器永远匹配不上 ——
+ * 表现是"代码块有底色、但一个字都没上色"，而且不会有任何报错。
+ *
+ * 【为什么不用 highlight.js 自带的主题 CSS】
+ * 那些主题写死了一套配色。这个应用的浅色/深色/自定义主题都能换，
+ * 固定配色的代码块会在换主题后显得格格不入。
+ * 映射到主题的语义变量之后，它跟着主题自动变，也不必多打包一份样式。
+ *
+ * 颜色分工：
+ *  - 关键字 / 标签 → 强调色（结构）
+ *  - 字符串 → 成功色（数据）
+ *  - 数字 / 变量 → 警告色（字面量）
+ *  - 函数名 / 选择器 → 信息色（可调用的东西）
+ *  - 注释 → 辅助文字色（可以略过的东西）
+ */
+
+.hljs-comment,
+.hljs-quote {
+  color: var(--color-text-tertiary);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-doctag,
+.hljs-type,
+.hljs-tag {
+  color: var(--color-accent-default);
+}
+
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-attribute,
+.hljs-meta .hljs-string {
+  color: var(--color-status-success);
+}
+
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-link,
+.hljs-selector-attr,
+.hljs-selector-pseudo,
+.hljs-meta {
+  color: var(--color-status-warning);
+}
+
+.hljs-title,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class {
+  color: var(--color-status-info);
+}
+
+.hljs-attr,
+.hljs-property,
+.hljs-params,
+.hljs-subst {
+  color: var(--color-text-secondary);
+}
+
+.hljs-built_in,
+.hljs-builtin-name {
+  color: var(--color-status-danger);
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: var(--weight-medium);
+}
+
+.hljs-deletion {
+  color: var(--color-status-danger);
+}

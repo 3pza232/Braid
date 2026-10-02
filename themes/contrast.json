@@ -1,0 +1,61 @@
+{
+  "id": "contrast",
+  "name": "高对比",
+  "version": "1.0.0",
+  "colorScheme": "dark",
+  "extends": "braid.dark",
+  "description": "纯黑底 + 高亮度文字 + 黄色强调，可读性优先（无障碍友好）",
+  "tokens": {
+    "semantic": {
+      "bg": {
+        "canvas": "#000000",
+        "surface": "#0A0A0A",
+        "raised": "#141414",
+        "sunken": "#000000",
+        "overlay": "rgba(0, 0, 0, 0.85)"
+      },
+      "text": {
+        "primary": "#FFFFFF",
+        "secondary": "#E6E6E6",
+        "tertiary": "#BFBFBF",
+        "disabled": "#8C8C8C",
+        "inverse": "#000000",
+        "link": "#FFD400"
+      },
+      "border": {
+        "subtle": "#4D4D4D",
+        "default": "#6E6E6E",
+        "strong": "#9E9E9E",
+        "focus": "#FFD400"
+      },
+      "accent": {
+        "default": "#FFD400",
+        "hover": "#FFE24D",
+        "active": "#E6BF00",
+        "subtle": "rgba(255, 212, 0, 0.18)",
+        "onAccent": "#000000"
+      },
+      "status": {
+        "info": "#6EC1FF",
+        "success": "#4ADE80",
+        "warning": "#FFD400",
+        "danger": "#FF6B6B",
+        "onStatus": "#000000"
+      },
+      "role": {
+        "userBubble": "#1F1F1F",
+        "userText": "#FFFFFF",
+        "assistantBubble": "#000000",
+        "assistantText": "#FFFFFF",
+        "systemBubble": "#141414",
+        "systemText": "#E6E6E6",
+        "toolBubble": "#191919",
+        "toolText": "#F0F0F0"
+      },
+      "selection": "rgba(255, 212, 0, 0.30)",
+      "caret": "#FFD400",
+      "scrollbarThumb": "#4D4D4D",
+      "scrollbarTrack": "transparent"
+    }
+  }
+}

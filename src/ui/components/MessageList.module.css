@@ -1,0 +1,132 @@
+/*
+ * 消息滚动区
+ *
+ * `min-height: 0` **不能省**：它是 grid 的子项，而 grid/flex 子项默认
+ * `min-height: auto` —— 内容一多就会把轨道撑开、把输入框顶出屏幕，
+ * 表现就是"整个界面无法滚动且错乱"。滚动容器必须显式压掉这个默认值。
+ *
+ * `overflow-anchor` 保留浏览器默认的滚动锚定：流式长回答时视口不该乱跳。
+ */
+.scroller {
+  min-height: 0;
+  overflow-y: auto;
+  /*
+   * 自成层叠上下文 —— 这一条是这个文件里最容易被忽略、后果最明显的一行
+   *
+   * 消息区里的浮动控件（下面的回到最上/最新）带 z-index。若这里不隔离，
+   * 那个 z-index 会直接参与**根层叠上下文**的排序，于是它能盖住
+   * 设置面板这类覆盖层：用户看到两个按钮浮在面板上面，点它却"没反应"
+   * —— 点确实触发了，但滚动的是面板**背后**的消息区，什么也看不见。
+   *
+   * `isolation: isolate` 把内部的一切封在这一层里：消息区里的东西再怎么写
+   * z-index，也不可能盖住应用级的覆盖层。
+   */
+  position: relative;
+  isolation: isolate;
+  /*
+   * 刻意**不写** `scroll-behavior: smooth`：
+   * 流式输出时会频繁设置 scrollTop，平滑动画会让它一直追不上内容，
+   * 视觉上反而是"卡在半路"。自动跟随必须用瞬时滚动。
+   */
+  padding: var(--space-5) var(--space-4) var(--space-4);
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  /* 由「外观 · 消息间距」驱动（App.module.css 里的 --message-gap） */
+  gap: var(--message-gap, var(--space-4));
+  width: 100%;
+  /* 具体宽度由「外观 · 内容宽度」设置决定（内联 style 覆盖） */
+  margin: 0 auto;
+}
+
+/*
+ * 滚动锚点（回到最上 / 回到最新）
+ *
+ * 放在滚动容器的末尾 + `position: sticky; bottom`：这样它停在**视口**底部，
+ * 而不是随内容一起滚走 —— 那正是这两个按钮存在的意义。
+ *
+ * `height: 0` 是关键：容器本身不占布局高度（否则会在最后一条消息下面多出
+ * 一条空带），两个按钮用绝对定位从这条"线"往上叠出来。
+ */
+.jump {
+  position: sticky;
+  bottom: var(--space-3);
+  height: 0;
+  /*
+   * 层级用最低的 `base`
+   *
+   * 它是**环境级**的浮动控件，语义上不该压过任何弹层：上下文菜单（dropdown）、
+   * 下拉、提示、覆盖层都应盖在它上面。用 sticky 那一档会反过来把它顶到
+   * 上下文菜单之上 —— 而那两样东西恰好都在右下角。
+   */
+  z-index: var(--z-base);
+}
+
+.jumpBtn {
+  position: absolute;
+  right: 0;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-raised);
+  color: var(--color-text-secondary);
+  box-shadow: var(--shadow-sm);
+  font-size: 12px;
+  line-height: 1;
+  /* 浮在正文之上，点击时才需要接管指针 */
+  pointer-events: auto;
+}
+
+/* 上下排布：下面那颗贴线，上面那颗叠在它上方 */
+.jumpDown {
+  bottom: 0;
+}
+
+.jumpUp {
+  bottom: 30px;
+}
+
+
+
+.jumpBtn:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-strong);
+}
+
+.jumpBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+}
+
+.dividerLine {
+  flex: 1;
+  height: 1px;
+  background: var(--color-border-subtle);
+}
+
+.dividerLabel {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  letter-spacing: var(--tracking-wide);
+}
+
+.empty {
+  padding: var(--space-16) 0;
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+}
+
+

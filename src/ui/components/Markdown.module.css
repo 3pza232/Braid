@@ -1,0 +1,193 @@
+/*
+ * Markdown 正文样式
+ *
+ * 所有颜色都走主题的语义变量：这样浅色/深色/自定义主题下都自动成立，
+ * 不会出现"换主题后代码块还是深色的"这种割裂。
+ */
+
+.md {
+  font-size: inherit;
+  line-height: 1.7;
+  color: inherit;
+  overflow-wrap: anywhere;
+}
+
+.md > *:first-child {
+  margin-top: 0;
+}
+
+.md > *:last-child {
+  margin-bottom: 0;
+}
+
+/*
+ * 单换行保留
+ *
+ * 聊天里大家习惯按行写（"第一点\n第二点"），而 Markdown 默认把单个换行
+ * 折叠成空格。用 pre-wrap 让换行照原样显示，比再装一个插件更省。
+ */
+.md p {
+  margin: 0 0 var(--space-2);
+  white-space: pre-wrap;
+}
+
+.md h1,
+.md h2,
+.md h3,
+.md h4,
+.md h5,
+.md h6 {
+  margin: var(--space-3) 0 var(--space-2);
+  font-weight: var(--weight-medium);
+  line-height: 1.35;
+}
+
+.md h1 {
+  font-size: 1.35em;
+}
+
+.md h2 {
+  font-size: 1.22em;
+}
+
+.md h3 {
+  font-size: 1.1em;
+}
+
+.md h4,
+.md h5,
+.md h6 {
+  font-size: 1em;
+}
+
+.md ul,
+.md ol {
+  margin: 0 0 var(--space-2);
+  padding-left: 1.5em;
+}
+
+.md li {
+  margin-bottom: 2px;
+}
+
+/* 列表项里的段落不要再叠一层间距，否则列表会散开 */
+.md li > p {
+  margin: 0;
+}
+
+.md blockquote {
+  margin: 0 0 var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border-left: 2px solid var(--color-border-strong);
+  color: var(--color-text-secondary);
+}
+
+.md hr {
+  margin: var(--space-3) 0;
+  border: none;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.md a {
+  color: var(--color-text-link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.md strong {
+  font-weight: var(--weight-medium);
+  color: var(--color-text-primary);
+}
+
+.md img {
+  max-width: 100%;
+  border-radius: var(--radius-md);
+}
+
+/* 行内代码：与代码块区分开，只给底色不加边框 */
+.md :not(pre) > code {
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-sunken);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+.md table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  margin: 0 0 var(--space-2);
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+
+.md th,
+.md td {
+  padding: 4px 10px;
+  border: 1px solid var(--color-border-default);
+  text-align: left;
+}
+
+.md th {
+  background: var(--color-bg-sunken);
+  font-weight: var(--weight-medium);
+}
+
+.md input[type='checkbox'] {
+  margin-right: 6px;
+}
+
+/* ── 代码块 ── */
+
+.codeBlock {
+  margin: 0 0 var(--space-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-sunken);
+  overflow: hidden;
+}
+
+.codeBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1px var(--space-2);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.codeLang {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+}
+
+.copyBtn {
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+}
+
+.copyBtn:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-raised);
+}
+
+.codeBlock pre {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  /* 代码块里的换行与缩进必须原样保留 */
+  white-space: pre;
+}
+
+/*
+ * 代码高亮的令牌配色**不在这里** —— 见 ui/styles/highlight.css。
+ * 那些类名由 highlight.js 在运行时注入，CSS Module 会把它们哈希掉，
+ * 放到模块里等于没写。
+ */

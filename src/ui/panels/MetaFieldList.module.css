@@ -1,0 +1,41 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    opacity var(--duration-fast) var(--ease-standard);
+}
+
+/* 正在被拖走的那一行淡出，让"它要离开原位"这件事一眼可见 */
+.row[data-dragging='true'] {
+  opacity: 0.4;
+}
+
+/* 落点提示：只有真的在拖动时才出现 */
+.row[data-over='true'] {
+  border-color: var(--color-border-focus);
+  background: var(--color-bg-sunken);
+}
+
+/*
+ * 拖拽手柄的样式在 `@ui/primitives` 的 `DragHandle` 里
+ * （原先这里那份 CSS 点阵就是被抽出去的那份，现已四处共用）
+ */
+
+.label {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+}

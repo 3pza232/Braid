@@ -1,0 +1,54 @@
+{
+  "id": "ocean",
+  "name": "深海蓝",
+  "version": "1.0.0",
+  "colorScheme": "dark",
+  "extends": "braid.dark",
+  "description": "冷色深海，青蓝强调色，适合夜间长时间使用",
+  "tokens": {
+    "semantic": {
+      "bg": {
+        "canvas": "#06111E",
+        "surface": "#0A1A2C",
+        "raised": "#0E2438",
+        "sunken": "#040C16",
+        "overlay": "rgba(2, 8, 15, 0.72)"
+      },
+      "text": {
+        "primary": "#DBEAF7",
+        "secondary": "#9FB9CE",
+        "tertiary": "#6E8CA3",
+        "disabled": "#4A6175",
+        "inverse": "#06111E",
+        "link": "#5FC8F5"
+      },
+      "border": {
+        "subtle": "#173049",
+        "default": "#1F4060",
+        "strong": "#2B5680",
+        "focus": "#38BDF8"
+      },
+      "accent": {
+        "default": "#38BDF8",
+        "hover": "#54CBFA",
+        "active": "#1FA6E0",
+        "subtle": "rgba(56, 189, 248, 0.15)",
+        "onAccent": "#031320"
+      },
+      "role": {
+        "userBubble": "#14324D",
+        "userText": "#DBEAF7",
+        "assistantBubble": "#0B2136",
+        "assistantText": "#D3E4F3",
+        "systemBubble": "#0E2438",
+        "systemText": "#9FB9CE",
+        "toolBubble": "#112A42",
+        "toolText": "#AFC9DD"
+      },
+      "selection": "rgba(56, 189, 248, 0.24)",
+      "caret": "#38BDF8",
+      "scrollbarThumb": "#1F4060",
+      "scrollbarTrack": "transparent"
+    }
+  }
+}

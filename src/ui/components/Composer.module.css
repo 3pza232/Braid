@@ -1,0 +1,162 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  background: var(--color-bg-canvas);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+  max-width: 820px;
+  padding: var(--space-2) var(--space-3) var(--space-2);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border-default);
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+.card:focus-within {
+  border-color: var(--color-border-focus);
+}
+
+/* 输入框与发送按钮同一行：按钮贴右侧 */
+.inputRow {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  flex: none;
+}
+
+.textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 52px;
+  /* 高度由 JS 按内容自适应（上限在设置里可调），这里不写死 */
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-1);
+  border: none;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: var(--content-font-size, var(--text-base));
+  line-height: var(--leading-snug);
+}
+
+.textarea::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.send {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  margin-bottom: 1px;
+  border-radius: var(--radius-md);
+  background: var(--color-accent-default);
+  color: var(--color-accent-on-accent);
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    opacity var(--duration-fast) var(--ease-standard);
+}
+
+.send:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}
+
+.send:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.send[data-variant='stop'] {
+  background: var(--color-status-danger);
+  color: var(--color-status-on-status);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: none;
+  padding: 0 var(--space-1);
+}
+
+/* 工具栏的直接子项是 Tooltip 的触发 span，因此：不压缩 + 让最后一项靠右 */
+.toolbar > * {
+  flex: none;
+}
+
+.toolbar > *:last-child {
+  margin-left: auto;
+}
+
+/*
+ * 档位选择
+ *
+ * 用**填充式胶囊**（浅底 + 透明描边），与左侧的模型下拉保持同一套视觉：
+ * 两者高度都是 26px、边框都占位，所以并排时不会出现一高一低。
+ * 描边用 transparent 而不是 none —— 否则悬停时加边框会让高度抖一下。
+ */
+/*
+ * 档位选择
+ *
+ * 高度**锁死 26px**，与左边的模型下拉（trigger 同为 26px）严格对齐 ——
+ * 之前靠 padding 撑出来的是 28px，并排时一高一低。
+ */
+.modes {
+  display: flex;
+  height: 26px;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-sunken);
+}
+
+.modeBtn {
+  display: inline-flex;
+  align-items: center;
+  flex: 1;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.modeBtn:hover {
+  color: var(--color-text-primary);
+}
+
+.modeBtn[data-active='true'] {
+  background: var(--color-bg-raised);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.warn {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  background: var(--color-bg-sunken);
+  color: var(--color-status-warning);
+  border: 1px dashed var(--color-status-warning);
+}
+
+.counter {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}

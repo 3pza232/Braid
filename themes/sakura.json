@@ -1,0 +1,53 @@
+{
+  "id": "sakura",
+  "name": "樱花粉",
+  "version": "1.0.0",
+  "colorScheme": "light",
+  "extends": "braid.light",
+  "description": "带一点粉调的浅色主题，强调色是樱花粉",
+  "tokens": {
+    "semantic": {
+      "bg": {
+        "canvas": "#FFF6F7",
+        "surface": "#FFFAFB",
+        "raised": "#FFFFFF",
+        "sunken": "#FCE9EE",
+        "overlay": "rgba(120, 50, 70, 0.35)"
+      },
+      "text": {
+        "primary": "#43262E",
+        "secondary": "#77525C",
+        "tertiary": "#A9848D",
+        "disabled": "#C9ACB3",
+        "inverse": "#FFF9FA",
+        "link": "#C2455F"
+      },
+      "border": {
+        "subtle": "#F7DDE3",
+        "default": "#EFCDD6",
+        "strong": "#DFA9B6",
+        "focus": "#E86A8A"
+      },
+      "accent": {
+        "default": "#E86A8A",
+        "hover": "#D65577",
+        "active": "#BC4767",
+        "subtle": "rgba(232, 106, 138, 0.14)",
+        "onAccent": "#FFFFFF"
+      },
+      "role": {
+        "userBubble": "#FFE1E9",
+        "userText": "#43262E",
+        "assistantBubble": "#FFFFFF",
+        "assistantText": "#43262E",
+        "systemBubble": "#FCE9EE",
+        "systemText": "#77525C",
+        "toolBubble": "#FFE9EF",
+        "toolText": "#5C3640"
+      },
+      "selection": "rgba(232, 106, 138, 0.20)",
+      "scrollbarThumb": "#EFC3CD",
+      "scrollbarTrack": "transparent"
+    }
+  }
+}

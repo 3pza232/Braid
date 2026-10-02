@@ -1,0 +1,58 @@
+# ── 依赖 ──
+node_modules/
+.pnpm-store/
+
+# ── 构建产物 ──
+dist/
+dist-ssr/
+*.tsbuildinfo
+
+# ── 桌面端（Electron / electron-builder）──
+# `release/` 是打包输出：里面有上百 MB 的 exe 与解压后的整个 Electron。
+# 它必须被忽略 —— 提交进去等于把几百 MB 二进制塞进版本库，而且每次打包都变。
+release/
+out/
+
+# ── 日志与本地记录 ──
+*.log
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+dev.err.log
+dev.out.log
+build.log
+
+# ── 运行时生成的本地数据 ──
+# 数据库导出、备份、临时目录：属于"我这台机器上的数据"，不该进版本库
+*.sqlite
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+/local/
+
+# ── 环境变量与本地覆盖 ──
+# 这里可能放着 API Key。**任何情况下都不要提交**
+.env
+.env.*
+!.env.example
+*.local
+
+# ── 编辑器与 IDE ──
+# 保留共享的代码风格配置，忽略个人工作区状态
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+.idea/
+*.swp
+*.swo
+
+# ── 操作系统 ──
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── 测试与覆盖率 ──
+coverage/
+.nyc_output/

@@ -1,0 +1,188 @@
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+
+/* 左对齐并给足内边距：按钮贴在面板边缘上会显得像"掉出来的" */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+}
+
+.groupHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.groupHead::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-border-subtle);
+}
+
+/* 折叠指示：转向比"内容浮现"更容易被看见 */
+.chevron {
+  flex: none;
+  font-size: 9px;
+  color: var(--color-text-tertiary);
+  transition: transform 0.12s ease;
+}
+
+.chevron[data-open='true'] {
+  transform: rotate(90deg);
+}
+
+.groupCount {
+  flex: none;
+  font-size: 10px;
+  color: var(--color-accent-default);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+/* 组内分组：只是视觉分段，不再各自折叠（折叠统一交给最外层） */
+.subGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.subTitle {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.syncOne,
+.resetRow {
+  flex: none;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-default);
+  background: none;
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.syncOne:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-accent-default);
+}
+
+/* 「恢复」是回退动作，悬停用危险色与「同步」区分开 */
+.resetRow:hover {
+  color: var(--color-status-danger);
+  border-color: var(--color-status-danger);
+}
+
+.resetAll {
+  flex: none;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-default);
+  background: none;
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}
+
+.resetAll:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-strong);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-sunken);
+}
+
+.groupTitle {
+  margin: 0;
+  font-size: 11px;
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+}
+
+.groupHint {
+  margin: 0 0 var(--space-1);
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+}
+
+/*
+ * 行内**不要**用 cursor: pointer
+ * 这一行不是可点区域（见 ThemeColors.tsx 里关于 label 的说明），
+ * 手型光标会让人以为整行都能点，实际只有色块能点
+ */
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.rowLabel {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-primary);
+}
+
+.rowActions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* 主题默认值用等宽字体：颜色值是给人比对用的，等宽对齐更好看 */
+.defaultValue {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+}
+
+.colorInput {
+  flex: none;
+  width: 30px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+}
+
+/* 被覆盖的项加一圈强调色描边：一眼看出"这项不是主题原本的颜色" */
+.row:has(.colorInput[data-overridden='true']) .colorInput {
+  border-color: var(--color-accent-default);
+}

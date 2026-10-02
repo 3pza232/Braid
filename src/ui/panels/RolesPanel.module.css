@@ -1,0 +1,490 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  background: var(--color-bg-overlay);
+  backdrop-filter: blur(2px);
+  animation: fade var(--duration-fast) var(--ease-decelerate);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  width: min(1040px, 100%);
+  height: min(86vh, 880px);
+  max-height: calc(100vh - 2 * var(--space-6));
+  border-radius: var(--radius-xl);
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border-default);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: rise var(--duration-normal) var(--ease-decelerate);
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex: none;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+}
+
+.subtitle {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notice {
+  margin-left: auto;
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-full);
+  background: var(--color-accent-subtle);
+  color: var(--color-accent-default);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.close {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  margin-left: auto;
+  align-self: center;
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+}
+
+.notice ~ .close {
+  margin-left: var(--space-2);
+}
+
+.close:hover {
+  background: var(--color-bg-sunken);
+  color: var(--color-text-primary);
+}
+
+/* ── 双栏 ── */
+.layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.listPane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: none;
+  width: 288px;
+  padding: var(--space-3);
+  border-right: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-surface);
+  min-height: 0;
+}
+
+.listActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* 纵向可滚会让 `overflow-x: visible` 计算成 `auto` —— 见侧栏同名说明 */
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+}
+
+/* 角色行 + 拖动手柄：手柄是功能性元素（可聚焦、可键盘操作） */
+.listRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  /* 手柄绝对定位的锚点 */
+  position: relative;
+}
+
+/*
+ * 手柄落在卡片的左内边距里（与卡片自己的 `--space-3` 对齐）
+ * 卡片因此与上方搜索框同宽 —— 手柄若是 flex 兄弟，卡片会窄 16px。
+ */
+.listRow [data-drag-handle] {
+  left: var(--space-3);
+}
+
+.listRow:hover [data-drag-handle] {
+  opacity: 1;
+}
+
+/*
+ * 拖动手柄的样式在 `@ui/primitives` 的 `DragHandle` 里 ——
+ * 与侧栏、消息信息栏共用同一个（原先这里是一份"三横线图标 + 悬停才出现"）。
+ */
+
+/*
+ * 「有未保存的修改」提示条
+ *
+ * 出现在详情区顶部（不是底部操作条里）：切换请求可能来自列表的任何位置，
+ * 提示必须在他看得见的地方，而不是要他先滚到底。
+ */
+.unsavedSwitch {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex: none;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-raised);
+}
+
+.unsavedText {
+  margin-right: auto;
+  font-size: var(--text-xs);
+  color: var(--color-status-warning);
+}
+
+.listRow[data-over='true'] {
+  box-shadow: inset 0 2px 0 var(--color-accent-default);
+}
+
+.listRow[data-dragging='true'] {
+  opacity: 0.5;
+}
+
+/* 角色行：给足高度与留白，避免"挤在一起"；flex:none 防止在滚动容器里被压扁 */
+.listItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  /*
+   * 用 `flex: 1` 而不是 `width: 100%`
+   *
+   * 它和拖动手柄同处一个 flex 行（`.listRow`）：`width: 100%` 是按
+   * **父容器**算的，再加一个手柄，整行就固定超出"手柄宽度"那么多 ——
+   * 这正是"加了拖动滑块之后右侧宽度超出"的原因。
+   * 交给 flex 分配剩余空间，手柄占多少它就让多少。
+   */
+  flex: 1;
+  min-width: 0;
+  /* 左侧让出 16px 给拖动手柄的槽位（手柄绝对定位，不会挤走内容） */
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-3) + 16px);
+  border-radius: var(--radius-lg);
+  border: 1px solid transparent;
+  text-align: left;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.listItem:hover {
+  background: var(--color-bg-sunken);
+}
+
+.listItem[data-active='true'] {
+  background: var(--color-bg-raised);
+  border-color: var(--color-border-default);
+  box-shadow: var(--shadow-sm);
+}
+
+.listText {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.listName {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.listDesc {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--color-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.builtinTag {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-subtle);
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+}
+
+/* ── 编辑器 ── */
+/*
+ * 编辑器区：**自身不滚动**
+ *
+ * 结构是 [滚动区][操作条] 两个兄弟：
+ *  - 滚动区 (formScroll) 承担滚动与内边距；
+ *  - 操作条 (footer) 是 flex:none 的固定高度块。
+ *
+ * 这样"内容能滚到的最低点"就是操作条的上边缘，两者永远不重叠 ——
+ * 比 `position: sticky` 更彻底（sticky 时内容会从按钮底下穿过去）。
+ * 注意内边距必须写在 formScroll 上而不是这里：写在父级会让滚动条也跟着缩进。
+ */
+.editorPane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.formScroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-4) var(--space-5) var(--space-5);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.empty {
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-sm);
+}
+
+/* 错误条是 editorPane 的直接子元素（在滚动区之外），所以要自带外边距 */
+.error {
+  flex: none;
+  margin: var(--space-3) var(--space-5) 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-status-danger);
+  color: var(--color-status-on-status);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* 未定义变量提示：是"提醒"不是"错误"，所以用警告色而非危险色 */
+.macroWarning {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--color-status-warning);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--color-status-warning);
+}
+
+/* 角色名筛选：与侧栏搜索框同一套观感 */
+.listSearch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  /*
+   * 不要再加水平外边距
+   *
+   * 外层 `.listPane` 已经有 `padding: var(--space-3)`，列间距由它的 gap 负责。
+   * 这里再补一圈横向 margin，搜索框就会比下面的角色行**窄 8px**，
+   * 左边缘也对不齐 —— 单看没问题，放进面板整体就很明显。
+   */
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-canvas);
+  color: var(--color-text-tertiary);
+}
+
+.listSearch:focus-within {
+  border-color: var(--color-border-focus);
+}
+
+/*
+ * 输入框本身必须显式清掉原生外观
+ *
+ * `<input type="search">` 自带浏览器默认的边框、内阴影与背景色，
+ * 只在外层套个带边框的 div 是不够的 —— 结果就是"框里还有一个框"，
+ * 而且它不跟主题走（亮色主题下尤其突兀）。
+ */
+.listSearch input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: var(--text-xs);
+}
+
+.listSearch input::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+/* ── 按钮 ── */
+.primarySm,
+.ghostSm,
+.dangerSm {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.primarySm {
+  background: var(--color-accent-default);
+  color: var(--color-accent-on-accent);
+  font-weight: var(--weight-medium);
+}
+
+.primarySm:hover {
+  background: var(--color-accent-hover);
+}
+
+.ghostSm {
+  border: 1px solid var(--color-border-default);
+  color: var(--color-text-secondary);
+}
+
+.ghostSm:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-strong);
+}
+
+/* 草稿有未保存修改时的提示 */
+/*
+ * 删除确认浮层
+ *
+ * 绝对定位而不是"就地换按钮"：就地替换会改变这一行的宽度，
+ * 把旁边的按钮挤得左右乱跳 —— 用户正要点它们的时候最烦这种跳动。
+ */
+.confirmWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.confirmPop {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--space-2));
+  z-index: var(--z-dropdown);
+  width: 250px;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-raised);
+  box-shadow: var(--shadow-lg);
+  text-align: left;
+}
+
+.confirmTitle {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--color-text-primary);
+}
+
+.confirmNote {
+  margin: 0 0 var(--space-2);
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--color-text-tertiary);
+}
+
+.confirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.dangerSm {
+  border: 1px solid var(--color-border-default);
+  color: var(--color-status-danger);
+}
+
+.dangerSm:hover {
+  border-color: var(--color-status-danger);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-raised);
+}
+
+.footerRight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

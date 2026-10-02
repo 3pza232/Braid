@@ -1,0 +1,47 @@
+# Windows 打包配置（electron-builder）
+#
+# 主产物是**安装版**（NSIS）：有安装向导、能改安装目录、带开始菜单与卸载项。
+# 免安装的便携版留在 `npm run dist:win:portable`（`--win portable` 覆盖这里的 target）。
+appId: com.braid.app
+productName: Braid
+copyright: Braid
+
+# 只打进运行时需要的东西：构建产物 + 主进程 + 示例主题。源码、测试、文档都不进包。
+files:
+  - dist/**/*
+  - electron/**/*
+  # 示例主题：首次运行会拷到 exe 同级的 themes/，让用户打开那个目录就看得懂格式
+  - themes/**/*
+  - package.json
+
+directories:
+  output: release
+  buildResources: electron
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: Braid-${version}-setup.exe
+  # 不做代码签名：个人项目没有证书，强行走进签名流程只会因为缺证书而失败。
+  # （代价：Windows 首次运行会弹 SmartScreen 提示，选"仍要运行"即可。）
+  signAndEditExecutable: false
+
+nsis:
+  # 有向导而不是"点一下直接装"：装哪儿、要不要快捷方式，用户自己定
+  oneClick: false
+  # 按用户安装（%LOCALAPPDATA%\Programs\Braid）：不弹 UAC，对轻量工具更合适
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Braid
+  artifactName: Braid-${version}-setup.exe
+  # 【绝不能改成 true】应用的数据在 %APPDATA%\Braid（OPFS 上的 SQLite = 用户全部会话）。
+  # 卸载时删掉它等于把用户的对话一并抹了 —— 那是最不可挽回的一类事故。
+  deleteAppDataOnUninstall: false
+
+# 便携版（`npm run dist:win:portable`）用；它不写注册表，数据目录同上
+portable:
+  artifactName: Braid-${version}-portable.exe

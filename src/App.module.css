@@ -1,0 +1,69 @@
+.app {
+  --sidebar-width: 272px;
+  --sidebar-rail: 64px;
+  --content-font-size: var(--text-base);
+
+  display: grid;
+  grid-template-columns: var(--sidebar-width) 1fr;
+  height: 100%;
+  background: var(--color-bg-canvas);
+  transition: grid-template-columns var(--duration-normal) var(--ease-standard);
+}
+
+/*
+ * 【关键】压掉 grid 子项的自动最小高度
+ *
+ * grid / flex 子项的 `min-height` 默认是 `auto`，含义是"不许比内容更矮" ——
+ * 于是 `height: 100%` 会被内容顶破：
+ *  - 侧栏变高 → 底部的「主题 / 设置」被推到屏幕外面；
+ *  - 主区变高 → 消息区失去滚动条，后面的消息翻不到。
+ *
+ * 整个从视口到滚动容器的链条上，**每一个** grid/flex 子项都要写一次
+ * `min-height: 0`。少写一层，表现就是"某一处莫名其妙顶出去了"。
+ */
+.app > * {
+  min-height: 0;
+}
+
+.app[data-sidebar-collapsed='true'] {
+  grid-template-columns: var(--sidebar-rail) 1fr;
+}
+
+/* 外观设置：正文字号 */
+.app[data-font-size='sm'] {
+  --content-font-size: var(--text-sm);
+}
+
+.app[data-font-size='lg'] {
+  --content-font-size: var(--text-lg);
+}
+
+/* 外观设置：消息密度 */
+.app[data-density='compact'] {
+  --message-gap: var(--space-3);
+  --bubble-padding-y: var(--space-2);
+}
+
+.app[data-density='comfortable'] {
+  --message-gap: var(--space-5);
+  --bubble-padding-y: var(--space-3);
+}
+
+.main {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  background: var(--color-bg-canvas);
+  /* 三个区域各管各的滚动；主区自身不再整体滚动 */
+  overflow: hidden;
+}
+
+/* 外观设置：减少动效（比系统级 prefers-reduced-motion 更细，可单独开关） */
+.app[data-motion='reduced'] *,
+.app[data-motion='reduced'] *::before,
+.app[data-motion='reduced'] *::after {
+  animation-duration: 0.001ms !important;
+  transition-duration: 0.001ms !important;
+}

@@ -1,0 +1,104 @@
+/*
+ * 触发区高度固定为 26px（与输入区工具栏里那排档位按钮一致）
+ * —— 同一行里混着原生控件与自绘控件时，高度差一两个像素就很显眼。
+ */
+/*
+ * 高度 26px + 填充式胶囊，与输入区工具栏里的档位按钮**完全同一套视觉**。
+ * 边框用 transparent 占位：悬停时只换颜色，高度不变。
+ */
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 26px;
+  padding: 0 var(--space-2) 0 var(--space-3);
+  border-radius: var(--radius-md);
+  /* 常驻边框：底色与周围太接近时（如列表项里）没有边线会看不清边界 */
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-sunken);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.trigger:hover {
+  border-color: var(--color-border-default);
+  color: var(--color-text-primary);
+}
+
+.trigger[aria-expanded='true'] {
+  border-color: var(--color-border-focus);
+  color: var(--color-text-primary);
+}
+
+.label {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chevron {
+  flex: none;
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.chevron[data-open='true'] {
+  transform: rotate(180deg);
+}
+
+/* 弹层：fixed 定位（坐标由组件量出），因此不受父级 overflow 裁切 */
+.menu {
+  position: fixed;
+  z-index: var(--z-dropdown);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 280px;
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-raised);
+  box-shadow: var(--shadow-lg);
+  overflow-y: auto;
+  animation: dropIn var(--duration-fast) var(--ease-decelerate);
+}
+
+.item {
+  display: block;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  text-align: left;
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.item:hover {
+  background: var(--color-bg-sunken);
+  color: var(--color-text-primary);
+}
+
+.item[data-active='true'] {
+  color: var(--color-accent-default);
+  font-weight: var(--weight-medium);
+}
+
+@keyframes dropIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

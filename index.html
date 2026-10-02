@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Braid</title>
+
+    <!--
+      防 FOUC：在 React 挂载之前就把主题标记写到 <html> 上。
+      这里是最小内联脚本，只做「读偏好 + 标记」两件事，
+      真正的 Design Token（CSS 变量）由 ThemeProvider 注入。
+    -->
+    <style>
+      html[data-theme='light'] {
+        background: #ffffff;
+      }
+      html[data-theme='dark'] {
+        background: #0b1220;
+      }
+    </style>
+    <script>
+      (function () {
+        try {
+          var pref = localStorage.getItem('braid.theme') || 'system';
+          var prefersDark =
+            pref === 'dark' ||
+            (pref !== 'light' &&
+              window.matchMedia &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var scheme = prefersDark ? 'dark' : 'light';
+          document.documentElement.dataset.theme = scheme;
+          document.documentElement.style.colorScheme = scheme;
+        } catch (e) {
+          /* 内联脚本失败不影响主流程 */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

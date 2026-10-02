@@ -1,0 +1,59 @@
+/*
+ * 拖动手柄
+ *
+ * 平时半透明、悬停或键盘聚焦时变实：完全隐藏会让功能不可发现
+ * （用户不会知道列表可以拖动），常亮又会在密集列表里成为噪点。
+ */
+.handle {
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-tertiary);
+  cursor: grab;
+  opacity: 0.42;
+  transition:
+    opacity var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.handle:hover {
+  color: var(--color-text-primary);
+  opacity: 1;
+}
+
+.handle:active {
+  cursor: grabbing;
+}
+
+.handle:focus-visible {
+  outline: none;
+  opacity: 1;
+  box-shadow: 0 0 0 2px var(--color-border-focus);
+}
+
+/*
+ * `inline`：作为行内的 flex 兄弟
+ * `align-self: stretch` 让它跟着行高长（行高由内容与密度决定，写死会错位），
+ * 图标用 grid 居中，不会跟着被拉变形。
+ */
+.inline {
+  width: 16px;
+  min-height: 18px;
+  align-self: stretch;
+}
+
+/*
+ * `gutter`：绝对落进行的左内边距
+ *
+ * 不占行宽 —— 行的盒子（含悬停底色、边框）因此与上方的搜索框同宽。
+ * 行必须自己 `position: relative`，并把左内边距留够（见各列表的 CSS）。
+ */
+.gutter {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 22px;
+}

@@ -1,0 +1,68 @@
+{
+  "id": "terminal",
+  "name": "TUI 复古终端",
+  "version": "1.0.0",
+  "colorScheme": "dark",
+  "extends": "braid.dark",
+  "description": "磷光绿单色终端风：纯黑底、荧光绿文字，正文使用等宽字体",
+  "tokens": {
+    "semantic": {
+      "bg": {
+        "canvas": "#050805",
+        "surface": "#0A0F0A",
+        "raised": "#0F170F",
+        "sunken": "#030503",
+        "overlay": "rgba(0, 0, 0, 0.7)"
+      },
+      "text": {
+        "primary": "#8CF2A0",
+        "secondary": "#5FB072",
+        "tertiary": "#3D7A4B",
+        "disabled": "#2A5234",
+        "inverse": "#050805",
+        "link": "#5FF28A"
+      },
+      "border": {
+        "subtle": "#162416",
+        "default": "#203620",
+        "strong": "#2E4D2F",
+        "focus": "#22C55E"
+      },
+      "accent": {
+        "default": "#22C55E",
+        "hover": "#34D96F",
+        "active": "#16A34A",
+        "subtle": "rgba(34, 197, 94, 0.16)",
+        "onAccent": "#04140A"
+      },
+      "status": {
+        "info": "#38BDF8",
+        "success": "#22C55E",
+        "warning": "#EAB308",
+        "danger": "#EF4444",
+        "onStatus": "#050805"
+      },
+      "role": {
+        "userBubble": "#102416",
+        "userText": "#8CF2A0",
+        "assistantBubble": "#0A0F0A",
+        "assistantText": "#8CF2A0",
+        "systemBubble": "#0F170F",
+        "systemText": "#5FB072",
+        "toolBubble": "#0D1A10",
+        "toolText": "#6FC684"
+      },
+      "selection": "rgba(34, 197, 94, 0.28)",
+      "caret": "#22C55E",
+      "scrollbarThumb": "#203620",
+      "scrollbarTrack": "transparent"
+    },
+    "typography": {
+      "fontFamily": {
+        "sans": "ui-monospace, 'Cascadia Mono', 'Cascadia Code', Consolas, 'Courier New', monospace",
+        "serif": "ui-monospace, 'Cascadia Mono', Consolas, monospace",
+        "mono": "ui-monospace, 'Cascadia Mono', Consolas, 'Courier New', monospace"
+      }
+    }
+  }
+}

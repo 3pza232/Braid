@@ -1,0 +1,663 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: var(--sidebar-width, 272px);
+  height: 100%;
+  padding: var(--space-3);
+  background: var(--color-bg-surface);
+  border-right: 1px solid var(--color-border-subtle);
+  overflow: hidden;
+}
+
+/* ── 折叠态：64px 图标栏（内边距收窄，让内容区更宽） ── */
+.sidebar[data-collapsed='true'] {
+  width: var(--sidebar-rail, 64px);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-1);
+}
+
+/*
+ * 品牌标记：使用 Nerd Font 字形。
+ * 该字形位于字体私有区，所以显式给出 Nerd Font 字体栈；
+ * 若本机未安装会渲染成方框 —— 届时换回内置 SVG 即可。
+ */
+.mark {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  font-family: 'Symbols Nerd Font', 'JetBrainsMono Nerd Font', 'CaskaydiaCove Nerd Font',
+    'FiraCode Nerd Font', monospace;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--color-accent-default);
+}
+
+.chevron {
+  display: grid;
+  place-items: center;
+  transform: rotate(180deg);
+  transition: transform var(--duration-normal) var(--ease-standard);
+}
+
+.sidebar[data-collapsed='true'] .chevron {
+  transform: none;
+}
+
+/* ── 顶部 ── */
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 30px;
+  padding: 0 var(--space-1);
+}
+
+.brandName {
+  flex: 1;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tight);
+}
+
+
+
+/* ── 折叠态的新建入口 ── */
+.railNew {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 40px;
+  flex: none;
+  border-radius: var(--radius-md);
+  background: var(--color-accent-default);
+  color: var(--color-accent-on-accent);
+}
+
+.railNew:hover {
+  background: var(--color-accent-hover);
+}
+
+/* ── 搜索 ── */
+/* ── 会话搜索 ── */
+/*
+ * 输入框 + 范围切换并排
+ *
+ * 切换按钮刻意**不放进 label**（label 会把点击转给输入框），
+ * 同时用 `align-items: stretch` 让两者**等高** —— 用 padding 去凑高度
+ * 只在当前字号下成立，字号一调就会错位。
+ */
+.searchRow {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-1);
+  margin: 0 var(--space-2) var(--space-2);
+}
+
+.search {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-canvas);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--color-text-tertiary);
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+/* 搜索范围切换：小而常驻，一眼看出当前搜的是标题还是正文 */
+.scopeBtn {
+  flex: none;
+  display: grid;
+  place-items: center;
+  /*
+   * 高度必须写 100%，**不能只靠父级 stretch 或 padding 去凑**
+   *
+   * 这个按钮被 `<Tooltip>` 包着，Tooltip 会渲染一个 `inline-flex` 的 span
+   * （它才是这里的 flex 子项，会被 stretch 拉开），而按钮是那个 span 的子项、
+   * 按 `align-items: center` 居中 —— 于是 span 撑满了、按钮却还是自身内容高度，
+   * 看起来就比输入框矮一截。
+   * 百分比高度相对的是 span 被拉伸后的确定高度，所以 100% 才真正等高。
+   */
+  height: 100%;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-canvas);
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.scopeBtn[data-active='true'] {
+  border-color: var(--color-accent-default);
+  color: var(--color-accent-default);
+}
+
+.scopeBtn:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-strong);
+}
+
+/*
+ * 正文搜索的命中汇总 + 前后跳
+ *
+ * 左侧文字长短会变（"3 个会话 · 12 处命中" ↔ "第 2/12 处"），
+ * 所以两颗按钮放在右侧固定位置，不跟着文字跑。
+ */
+.searchHint {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: calc(-1 * var(--space-1)) var(--space-2) var(--space-2) var(--space-3);
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+}
+
+.searchHintText {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stepBtn {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-tertiary);
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.stepBtn:hover:not(:disabled) {
+  background: var(--color-bg-raised);
+  color: var(--color-text-primary);
+}
+
+.stepBtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/*
+ * 拖动手柄
+ *
+ * 刻意做成独立的一小条，而不是让整行可拖：行本身要响应单击（切换会话）与
+ * 双击（重命名），整行可拖会让这两种操作变脆。手柄是**功能性**元素，
+ * 所以可聚焦、有 aria-label，键盘按住 Alt + ↑/↓ 也能挪。
+ */
+/*
+ * 拖动手柄的样式在 `@ui/primitives` 的 `DragHandle` 里
+ *
+ * 早先这里有一份自己的（三横线图标 + 悬停才出现），消息信息栏另有一份
+ * （CSS 点阵 + 常显）—— 同一操作两副面孔。现在统一到那一个组件，
+ * 四个列表（消息信息栏、侧栏会话、侧栏角色、角色面板）长得完全一致。
+ */
+
+/* 拖到哪一行、哪一行亮出插入线 */
+.item[data-over='true'],
+.roleRowWrap[data-over='true'] {
+  box-shadow: inset 0 2px 0 var(--color-accent-default);
+}
+
+.item[data-dragging='true'],
+.roleRowWrap[data-dragging='true'] {
+  opacity: 0.5;
+}
+
+/* 角色行需要一层包裹才能放手柄（行本身是 button） */
+.roleRowWrap {
+  display: flex;
+  align-items: center;
+  flex: none;
+  min-width: 0;
+  /* 手柄绝对定位的锚点 */
+  position: relative;
+}
+
+.search:focus-within {
+  border-color: var(--color-border-focus);
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--color-text-primary);
+}
+
+.search input::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+/* ── 分区 ── */
+.section {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  gap: 2px;
+  /* 面板化：与侧栏底色区分开，可折叠区块一眼可辨（颜色全部来自语义 token，跟随主题） */
+  padding: var(--space-2);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.section[data-collapsed='true'] {
+  flex: 0 0 auto;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 var(--space-1);
+}
+
+.sectionToggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-tertiary);
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+
+.sectionToggle:hover {
+  color: var(--color-text-primary);
+}
+
+.sectionLabel {
+  font-size: 11px;
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-wide);
+  white-space: nowrap;
+}
+
+.sectionCount {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+}
+
+/* 展开时是上箭头（点击收起），收起时是下箭头（点击展开） */
+/* 展开 = 下箭头（点击收起）；收起 = 上箭头（点击展开） */
+.sectionChevron {
+  display: grid;
+  place-items: center;
+  flex: none;
+  transform: rotate(90deg);
+  transition: transform var(--duration-normal) var(--ease-standard);
+}
+
+.sectionChevron[data-open='false'] {
+  transform: rotate(-90deg);
+}
+
+/* ── 列表 ── */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /*
+   * 横向内边距必须与上方搜索框的外边距（`.searchRow` 的 `var(--space-2)`）一致
+   *
+   * 行盒子与搜索框同宽、左右对齐，看上去才是"一套东西"；
+   * 早先行盒子铺满整个控制区，比搜索框宽出 16px，加了手柄之后更明显。
+   */
+  padding: 0 var(--space-2) var(--space-1);
+  /*
+   * 纵向可滚时，`overflow-x` 的 `visible` 会被计算成 `auto` ——
+   * 于是任何一处"最小宽度"算错，整列就冒出一条横向滚动条。
+   * 侧栏不该横滚，也不该因为某一行多出几个像素就全局抖一下。
+   */
+  overflow-x: hidden;
+}
+
+/*
+ * 列表空态
+ *
+ * 与角色区那句"还没有任何角色…"同一种语气：告诉用户**下一步做什么**，
+ * 而不是留一片空白让他自己猜。
+ */
+.listEmpty {
+  margin: 0;
+  padding: var(--space-3) var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+}
+
+/*
+ * 会话行
+ *
+ * 结构： [主体按钮] + [时间 / 操作条] + [删除确认条]
+ * 行本身是 div 而不是 button，因为里面还有按钮 —— 按钮不能嵌套按钮。
+ *
+ * 「时间」与「操作条」占同一个位置，悬停时互相切换：
+ * 这样操作按钮永远不会压住标题，也不需要给它们做不透明的渐变遮罩。
+ */
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  /* 在可滚动 flex 列里禁止被压缩 */
+  flex: none;
+  /* 拖动手柄绝对定位在它的左内边距里 —— 手柄不占行宽，行与搜索框同宽 */
+  position: relative;
+  border-radius: var(--radius-md);
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+
+/* 悬停整行或键盘聚焦到手柄时，手柄由半透明变实 */
+.item:hover [data-drag-handle],
+.roleRowWrap:hover [data-drag-handle] {
+  opacity: 1;
+}
+
+.item:hover {
+  background: var(--color-bg-sunken);
+}
+
+.item[data-active='true'] {
+  background: var(--color-bg-raised);
+  box-shadow: var(--shadow-sm);
+}
+
+.itemMain {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+  /* 左侧让出 16px 给拖动手柄的槽位（手柄是绝对定位，不会挤走标题） */
+  padding: var(--space-2) var(--space-2) var(--space-2) calc(var(--space-2) + 16px);
+  border-radius: var(--radius-md);
+  text-align: left;
+}
+
+/* 角色标识点：颜色取自该会话的角色实例头像色 */
+.roleDot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: var(--radius-full);
+  opacity: 0.85;
+}
+
+.itemTitle {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item[data-active='true'] .itemTitle {
+  font-weight: var(--weight-medium);
+}
+
+.itemTime {
+  flex: none;
+  padding-right: var(--space-2);
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+}
+
+.item:hover .itemTime {
+  display: none;
+}
+
+.itemActions {
+  display: none;
+  align-items: center;
+  gap: 1px;
+  flex: none;
+  padding-right: var(--space-1);
+}
+
+.item:hover .itemActions,
+.item:focus-within .itemActions {
+  display: flex;
+}
+
+/* 删除确认条出现时，时间让位（否则鼠标移开后两者会并排挤在一起） */
+.item[data-confirming='true'] .itemTime {
+  display: none;
+}
+
+/* 行内重命名：占用整行，不显示时间与操作条 */
+.renameInput {
+  flex: 1;
+  min-width: 0;
+  margin: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-focus);
+  background: var(--color-bg-canvas);
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+  outline: none;
+}
+
+/* 删除确认：把危险操作变成两步，避免误删整场对话 */
+.actionsConfirm {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  padding-right: var(--space-1);
+}
+
+.confirmYes,
+.confirmNo {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+}
+
+.confirmYes {
+  background: var(--color-status-danger);
+  color: var(--color-accent-on-accent);
+}
+
+.confirmNo {
+  background: var(--color-bg-canvas);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--color-text-secondary);
+}
+
+/* ── 角色行：给足高度与留白，避免挤在一起 ── */
+.roleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  /*
+   * 必须撑满剩余宽度并允许收缩
+   *
+   * 这一行被包在 `.roleRowWrap` 里（外包层是为了放手柄），
+   * 早先写的是 `flex: none`：按钮按内容宽度定尺寸，手柄一加进来，
+   * 手柄宽度 + 内容宽度就**超出**了侧栏 —— 表现是列表右侧被顶出去、
+   * 甚至整列出现横向滚动条。
+   */
+  flex: 1;
+  min-width: 0;
+  /* 左侧让出 16px 给拖动手柄的槽位 */
+  padding: var(--space-2) var(--space-3) var(--space-2) calc(var(--space-3) + 16px);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  text-align: left;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.roleRow:hover {
+  background: var(--color-bg-sunken);
+}
+
+.roleRow[data-active='true'] {
+  background: var(--color-bg-raised);
+  border-color: var(--color-border-subtle);
+}
+
+.roleText {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.roleName {
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roleRow[data-active='true'] .roleName {
+  font-weight: var(--weight-medium);
+  color: var(--color-accent-default);
+}
+
+.roleDesc {
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--color-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty {
+  padding: var(--space-3) var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+}
+
+/* ── 折叠态列表 ── */
+.railGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  align-items: center;
+  width: 100%;
+  max-height: 40%;
+  overflow-y: auto;
+}
+
+/* 直接子项（含 Tooltip 的触发 span）都不允许在滚动容器里被压缩 */
+.railGroup > * {
+  flex: none;
+}
+
+.railItem {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 34px;
+  flex: none;
+  border-radius: var(--radius-md);
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+
+.railItem:hover {
+  background: var(--color-bg-sunken);
+}
+
+.railItem[data-active='true'] {
+  background: var(--color-accent-subtle);
+}
+
+.railDot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-full);
+  background: var(--color-border-strong);
+}
+
+.railItem[data-active='true'] .railDot {
+  background: var(--color-accent-default);
+}
+
+.railAvatar {
+  display: grid;
+  place-items: center;
+  padding: 1px;
+  flex: none;
+  border-radius: var(--radius-full);
+  transition: box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.railAvatar[data-active='true'] {
+  box-shadow: 0 0 0 2px var(--color-accent-default);
+}
+
+.railDivider {
+  width: 28px;
+  height: 1px;
+  flex: none;
+  background: var(--color-border-subtle);
+}
+
+/* ── 底部 ── */
+/* margin-top: auto 保证两个分区都折叠时，底部工具仍贴在栏底而不是往上跑 */
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.sidebar[data-collapsed='true'] .footer {
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.railFooter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  align-items: center;
+  margin-top: auto;
+}
+
+/* 外层不再画框：下拉触发器自己有边线，套一层框反而"框中框" */
+.themeSwitch {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.themeSwitch > button {
+  flex: 1;
+  min-width: 0;
+}
+

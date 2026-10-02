@@ -1,0 +1,30 @@
+/*
+ * 搜索命中的高亮样式（**全局样式，不是 CSS Module**）
+ *
+ * `::highlight(...)` 里的名字是运行时由 JS 注册的，CSS Module 哈希类名
+ * 那套机制在这里完全不适用 —— 放进模块文件等于没写。
+ */
+
+/*
+ * 普通命中：一层半透明强调色
+ *
+ * 用淡底而不是刺眼的纯黄：用户是来读那句话的，
+ * 高亮只该帮他找到位置，不该盖过正文本身。
+ */
+::highlight(braid-search) {
+  background-color: color-mix(in srgb, var(--color-accent-default) 35%, transparent);
+  color: var(--color-text-primary);
+}
+
+/*
+ * 当前聚焦的那一处：实底 + 反色
+ *
+ * 按「下一处 / 上一处」时，用户要能一眼看出**这次跳到了哪** ——
+ * 与普通命中同一种底色的话，一片淡黄里根本认不出当前这一处。
+ * 反色用的是 Tooltip 已经在用的同一对 token（深底 + 画布色文字），
+ * 因此亮色/暗色主题下都是可读的。
+ */
+::highlight(braid-search-current) {
+  background-color: var(--color-accent-default);
+  color: var(--color-bg-canvas);
+}

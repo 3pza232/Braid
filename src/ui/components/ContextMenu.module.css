@@ -1,0 +1,221 @@
+/* 外层只是定位锚点：菜单要相对这个按钮展开 */
+.root {
+  position: relative;
+  display: inline-flex;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-md);
+  color: var(--color-text-tertiary);
+}
+
+.trigger:hover {
+  background: var(--color-bg-raised);
+}
+
+.bar {
+  display: block;
+  width: 52px;
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-sunken);
+  overflow: hidden;
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  background: var(--color-accent-default);
+  transition: width var(--duration-fast) var(--ease-standard);
+}
+
+/*
+ * 接近上限时变色
+ *
+ * 不是装饰：到 70% 之后下一条消息就可能触发压缩，用户需要在这之前就知道
+ * "该压一次或者开新会话了"。
+ */
+.trigger[data-level='near'] .fill {
+  background: var(--color-status-warning);
+}
+
+.trigger[data-level='over'] .fill {
+  background: var(--color-status-danger);
+}
+
+.text {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.percent {
+  margin-left: var(--space-2);
+  color: var(--color-text-secondary);
+}
+
+.badge {
+  flex: none;
+  padding: 0 5px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-sunken);
+  border: 1px solid var(--color-border-default);
+  color: var(--color-text-tertiary);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+/* ── 弹出面板 ── */
+
+/*
+ * 弹出面板
+ *
+ * 【为什么是 fixed 而不是 absolute】
+ * 它挂在顶栏里，而顶栏所在的主区是 `overflow: hidden`（三个区域各管各的滚动，
+ * 见 App.module.css）。absolute 定位的菜单一出顶栏边界就被**裁掉**：
+ * 用户看到的是"菜单没浮在上层、被挡住了"。
+ *
+ * absolute 在裁剪容器里没有出路，只能**脱出去**：portal 到 body + fixed 定位，
+ * 位置由触发按钮的 `getBoundingClientRect()` 算出来（与 Dropdown 同一套做法）。
+ * 与主区隔离之后，`z-index` 也终于真的参与根层叠排序，这一档 token 才有意义。
+ *
+ * `top` / `right` 由组件按量到的位置写在内联样式里，所以这里不再声明。
+ */
+.panel {
+  position: fixed;
+  z-index: var(--z-dropdown);
+  width: 330px;
+  /* 兜底：窗口很矮时也不让面板顶出屏幕，超出部分内部滚动 */
+  max-height: calc(100vh - var(--space-4));
+  overflow-y: auto;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-raised);
+  box-shadow: var(--shadow-lg);
+  text-align: left;
+}
+
+.head {
+  margin-bottom: var(--space-2);
+  font-size: 11px;
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+}
+
+.warn {
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-sunken);
+  border-left: 2px solid var(--color-status-danger);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.detail {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.detail > div {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.detail dt {
+  flex: none;
+  width: 64px;
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+}
+
+.detail dd {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.muted {
+  color: var(--color-text-tertiary);
+}
+
+.note {
+  margin: var(--space-2) 0 0;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  line-height: 1.5;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.compress {
+  flex: 1;
+  padding: 5px var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-default);
+  color: var(--color-text-primary);
+  font-size: var(--text-xs);
+}
+
+.compress:hover:not(:disabled) {
+  border-color: var(--color-accent-default);
+}
+
+.compress:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ghost {
+  flex: none;
+  padding: 5px var(--space-2);
+  border-radius: var(--radius-md);
+  color: var(--color-text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.ghost:hover {
+  color: var(--color-text-primary);
+}
+
+.summaryMeta {
+  margin-top: var(--space-2);
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+}
+
+/* 纪要正文：等宽 + 可滚动，长纪要不会把面板撑爆 */
+.summary {
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2);
+  max-height: 220px;
+  overflow: auto;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-sunken);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

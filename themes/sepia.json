@@ -1,0 +1,53 @@
+{
+  "id": "sepia",
+  "name": "护眼米黄",
+  "version": "1.0.0",
+  "colorScheme": "light",
+  "extends": "braid.light",
+  "description": "淡黄纸面底色 + 低对比暖褐文字，长时间阅读不刺眼",
+  "tokens": {
+    "semantic": {
+      "bg": {
+        "canvas": "#F5EEDB",
+        "surface": "#FAF5E6",
+        "raised": "#FEFCF3",
+        "sunken": "#EDE4CB",
+        "overlay": "rgba(90, 74, 45, 0.35)"
+      },
+      "text": {
+        "primary": "#42381F",
+        "secondary": "#6B5D3C",
+        "tertiary": "#94855F",
+        "disabled": "#B7AA85",
+        "inverse": "#FBF7EA",
+        "link": "#8A6210"
+      },
+      "border": {
+        "subtle": "#E6DABB",
+        "default": "#D8C89E",
+        "strong": "#C2AE7C",
+        "focus": "#B0762A"
+      },
+      "accent": {
+        "default": "#A96F22",
+        "hover": "#8F5C18",
+        "active": "#774D14",
+        "subtle": "rgba(169, 111, 34, 0.14)",
+        "onAccent": "#FFFDF4"
+      },
+      "role": {
+        "userBubble": "#F7E9C8",
+        "userText": "#42381F",
+        "assistantBubble": "#FEFCF3",
+        "assistantText": "#42381F",
+        "systemBubble": "#EFE6CC",
+        "systemText": "#6B5D3C",
+        "toolBubble": "#F2E7C9",
+        "toolText": "#5C4F2E"
+      },
+      "selection": "rgba(176, 118, 42, 0.22)",
+      "scrollbarThumb": "#CBBB8E",
+      "scrollbarTrack": "transparent"
+    }
+  }
+}

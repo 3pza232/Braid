@@ -1,0 +1,94 @@
+/*
+ * 通知条
+ *
+ * 悬浮在右下角：不占布局空间，因此不会把消息列表挤动 ——
+ * 一条通知导致正文跳位，比没有通知更烦人。
+ */
+.stack {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  /* 高于所有面板：权限警报必须能盖在设置抽屉之上，否则等于没说 */
+  /* 提示是**临时性**的：即使面板开着也该看得见，所以放在 toast 那一档 */
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: min(420px, 60vw);
+}
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border-subtle);
+  box-shadow: var(--shadow-md);
+  animation: notice-in var(--duration-fast) var(--ease-standard);
+}
+
+/* 左边一条色带区分"权限警报"与"操作失败"：颜色比文字更快被识别 */
+.notice[data-tone='alert'] {
+  border-left: 3px solid var(--color-status-danger);
+}
+
+.notice[data-tone='error'] {
+  border-left: 3px solid var(--color-status-warning);
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--color-text-primary);
+}
+
+/*
+ * 通知里的动作（目前只有"撤销"）
+ *
+ * 用文字而不是图标：这里是"要不要撤回刚才那一下"的决定，写清楚比画一个箭头强。
+ * 颜色用强调色 —— 它是这一条里唯一的可操作项，该比正文显眼。
+ */
+.action {
+  flex: none;
+  padding: 1px var(--space-2);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--color-accent-default);
+  background: var(--color-bg-canvas);
+}
+
+.action:hover {
+  border-color: var(--color-accent-default);
+  background: var(--color-accent-subtle);
+}
+
+.close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-tertiary);
+}
+
+.close:hover {
+  background: var(--color-bg-sunken);
+  color: var(--color-text-primary);
+}
+
+@keyframes notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
