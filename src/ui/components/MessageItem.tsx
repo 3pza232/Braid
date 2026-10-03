@@ -9,6 +9,8 @@ import type {
 } from '@domain/value-objects/appSettings';
 import type { ResolvedIdentity } from '@domain/rules/resolveConfig';
 import { cacheStatsOf, formatCacheHitRate, type CacheStats } from '@domain/value-objects/usage';
+import type { StreamPhase } from '@ports/ChatApi';
+import { autoPanelOpen } from '@ui/utils/panelVisibility';
 import { IconButton, Tooltip } from '@ui/primitives';
 import type { MessageId } from '@shared/ids';
 import { Avatar } from './Avatar';
@@ -68,6 +70,14 @@ interface MessageItemProps {
    * 散成两处判断迟早会不一致。
    */
   onJumpTo: (id: MessageId, edge: 'top' | 'bottom') => void;
+  /**
+   * 处于生成中的**那条消息**此刻的阶段（其余消息一律收到 `null`）
+   *
+   * 传字符串而不是整个阶段对象：这是原始值，除了正在生成的那一条，
+   * 别的消息 props 不变，它们的 `memo` 不会被一次阶段变化废掉。
+   * 默认 `null` 是刻意的 —— 历史消息永远按"没有阶段"处理。
+   */
+  streamPhase?: StreamPhase | null;
 }
 
 /** 结果提示的截断长度：一次目录列表或文件内容可能上万字，塞进悬浮窗根本没法看 */
@@ -140,6 +150,7 @@ function MessageItemView({
   onContinue,
   canContinue = false,
   onJumpTo,
+  streamPhase = null,
 }: MessageItemProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -186,31 +197,31 @@ function MessageItemView({
   }
 
   /*
-   * 折叠时机与思考过程同一套逻辑：
-   *  - 有调用在跑 → 默认展开（用户正需要看它在动什么）；
-   *  - 全部结束 → 默认收起（结论已经在正文里，过程不必一直占着版面）；
-   *  - 用户点过就以用户为准，否则流式更新会把他的选择冲掉。
+   * 展开 / 折叠时机：**按阶段**判断，规则在 `autoPanelOpen` 里（纯函数，有用例钉住）
+   *
+   * 【为什么不再用"有没有东西在跑"判断】那套判据有两个真实毛病：
+   *  - 思考框看的是 `streaming && 正文为空`，而续写的第二轮又开始思考时正文早就不为空了
+   *    → 不展开；
+   *  - 工具框看的是"有调用还没结果"，写一个文件只要几十毫秒 → 一开一合看不见。
+   * 现在统一成"此刻处于哪个阶段"，于是"开始说正文就折叠、中途再思考 / 调用工具再展开"
+   * 变成同一条规则的自然结果。
+   *
+   * 用户手动点过之后以用户的为准（override 非 null），否则流式每次 emit 都会把他的操作重置回去。
    */
   const [toolsOverride, setToolsOverride] = useState<boolean | null>(null);
   const toolsBusy = toolActivity.some((item) => item.result === null);
-  const toolsOpen = toolsOverride ?? toolsBusy;
   const toolsDone = toolActivity.filter((item) => item.result !== null).length;
   const toolsFailed = toolActivity.filter((item) => item.result?.isError === true).length;
 
-  /*
-   * 思考过程的展开时机
-   *
-   *  - 设置了「默认展开」→ 一直展开，**不自动折叠**（用户明确说了要一直看着）；
-   *  - 默认 → **思考时展开、一出正文就自动折叠**：
-   *      · 思考中（还在流式、正文还是空的）展开展示推理链路；
-   *      · 正文一出现就折叠，把版面让给正文 —— 这时思考内容已经看过了。
-   *
-   * 用户手动点过之后以用户的为准（`reasoningOverride`），
-   * 否则流式每次 emit 都会把他的操作重置回去。
-   */
-  const autoReasoningOpen =
-    display.reasoningDefaultExpanded || (node.status === 'streaming' && text.length === 0);
-  const reasoningOpen = reasoningOverride ?? autoReasoningOpen;
+  const autoPanels = autoPanelOpen({
+    // 只管正在生成的那条：其余消息一律按"没有阶段"处理（历史消息保持默认收起）
+    phase: node.status === 'streaming' ? (streamPhase ?? null) : null,
+    reasoningAlwaysOpen: display.reasoningDefaultExpanded,
+    toolsAlwaysOpen: display.toolsDefaultExpanded,
+    follow: display.followProgress,
+  });
+  const reasoningOpen = reasoningOverride ?? autoPanels.reasoning;
+  const toolsOpen = toolsOverride ?? autoPanels.tools;
 
   /*
    * 搜索命中落在思考过程里 → 自动展开
@@ -348,14 +359,26 @@ function MessageItemView({
 
       case 'tokens':
         if (node.usage) {
+          /*
+           * `≈` = 本地估算（服务商的准确值还没到，见 `TokenUsage.estimated`）
+           *
+           * 与缓存命中率同一套约定：估算不能冒充服务端数据。每轮结束会换成准确值，
+           * 这个记号随之消失 —— 所以它顺带也是"还在生成"的一个信号。
+           */
+          const estimated = node.usage.estimated === true;
           metaEntries.push({
             id: field.id,
             content: (
               <Tooltip
-                label={`输入 ${node.usage.promptTokens} · 输出 ${node.usage.completionTokens}${
-                  node.usage.reasoningTokens ? ` · 思考 ${node.usage.reasoningTokens}` : ''
-                }`}
+                label={
+                  estimated
+                    ? `生成中（本地估算，这一轮结束后换成准确值）：约 ${node.usage.promptTokens} 输入 + ${node.usage.completionTokens} 输出`
+                    : `输入 ${node.usage.promptTokens} · 输出 ${node.usage.completionTokens}${
+                        node.usage.reasoningTokens ? ` · 思考 ${node.usage.reasoningTokens}` : ''
+                      }`
+                }
               >
+                {estimated ? '≈' : ''}
                 {node.usage.totalTokens.toLocaleString()} tokens
               </Tooltip>
             ),
@@ -392,44 +415,69 @@ function MessageItemView({
 
   const actions = !editing ? (
     <div className={styles.actions}>
-      {/*
-        上面一横排是"对这条消息做什么"，下面那个小箭头是"我要看这条的哪一头"
-
-        跳到底部的按钮**单独占一行**（在原本那几个按钮的换行下方），所以操作条
-        整体改成纵排 —— 图标仍在 .actionRow 里横排，位置与宽度都不变。
-      */}
-      <div className={styles.actionRow}>
-        <Tooltip label="复制内容">
-          <IconButton label="复制内容" size={26} onClick={() => onCopy(text)}>
-            <IconCopy size={14} />
+      <Tooltip label="复制内容">
+        <IconButton label="复制内容" size={26} onClick={() => onCopy(text)}>
+          <IconCopy size={14} />
+        </IconButton>
+      </Tooltip>
+      <Tooltip label="编辑">
+        <IconButton label="编辑" size={26} onClick={() => setEditing(true)}>
+          <IconPencil size={14} />
+        </IconButton>
+      </Tooltip>
+      {node.role === 'assistant' ? (
+        <Tooltip label="重新生成">
+          <IconButton label="重新生成" size={26} onClick={() => onRegenerate(node.id)}>
+            <IconRefresh size={14} />
           </IconButton>
         </Tooltip>
-        <Tooltip label="编辑">
-          <IconButton label="编辑" size={26} onClick={() => setEditing(true)}>
-            <IconPencil size={14} />
-          </IconButton>
-        </Tooltip>
-        {node.role === 'assistant' ? (
-          <Tooltip label="重新生成">
-            <IconButton label="重新生成" size={26} onClick={() => onRegenerate(node.id)}>
-              <IconRefresh size={14} />
-            </IconButton>
-          </Tooltip>
-        ) : null}
-        <Tooltip label="删除此条消息">
-          {/* 危险色：这一排里只有它是不可撤销的，必须一眼可辨（见 module.css 的 .danger） */}
-          <IconButton label="删除" size={26} className={styles.danger} onClick={() => onDelete(node.id)}>
-            <IconTrash size={14} />
-          </IconButton>
-        </Tooltip>
-      </div>
-      <Tooltip label="跳转到消息底部">
-        <IconButton label="跳转到消息底部" size={22} onClick={() => onJumpTo(node.id, 'bottom')}>
-          <IconArrowDown size={13} />
+      ) : null}
+      <Tooltip label="删除此条消息">
+        {/* 危险色：这一排里只有它是不可撤销的，必须一眼可辨（见 module.css 的 .danger） */}
+        <IconButton label="删除" size={26} className={styles.danger} onClick={() => onDelete(node.id)}>
+          <IconTrash size={14} />
         </IconButton>
       </Tooltip>
     </div>
   ) : null;
+
+  /*
+   * 跳到这条消息的开头 / 结尾：一竖组，贴在**头像那一侧**
+   *
+   * 【为什么合成一组】早先是两处分开的 —— `^` 挂在气泡的角上、`▼` 在操作条的第二行，
+   * 用起来要来回找（用户反馈："还是有点不舒适"）。现在两个上下紧挨、同在一侧。
+   *
+   * 【为什么用 sticky】它得在长消息里跟着屏幕往下走，但**活动范围只能在这条消息里**：
+   * sticky 的活动范围天然由所在容器决定，而这个容器就是气泡行（高度 ≈ 气泡高度），
+   * 所以它漂到气泡底部就被顶住，绝不会跑到别的消息上；短消息（一屏内）根本不会动。
+   * 静止时与气泡上沿对齐（`align-self: flex-start`）。
+   *
+   * `editing` 时不渲染：那一行是编辑区，没有"气泡的哪一头"可跳。
+   */
+  const navGroup = editing ? null : (
+    <div className={styles.navGroup}>
+      <Tooltip label="跳转到消息顶部">
+        <button
+          type="button"
+          className={styles.navBtn}
+          aria-label="跳转到消息顶部"
+          onClick={() => onJumpTo(node.id, 'top')}
+        >
+          <IconArrowUp size={13} />
+        </button>
+      </Tooltip>
+      <Tooltip label="跳转到消息底部">
+        <button
+          type="button"
+          className={styles.navBtn}
+          aria-label="跳转到消息底部"
+          onClick={() => onJumpTo(node.id, 'bottom')}
+        >
+          <IconArrowDown size={13} />
+        </button>
+      </Tooltip>
+    </div>
+  );
 
   return (
     <article
@@ -553,8 +601,14 @@ function MessageItemView({
               </div>
             ) : null}
 
-            {/* 文件工具活动：像思考过程一样可折叠，一行一次调用 */}
-            {toolActivity.length > 0 ? (
+            {/*
+              文件工具活动：像思考过程一样可折叠，一行一次调用
+
+              与思考链路同一个开关（`showReasoning`）控制显示：它现在管的是"过程"
+              这一类东西（字段名保留是为了不做设置迁移，见 appSettings 的说明）。
+              关掉只是不展示 —— 调用与结果都还在消息里、导出里也在。
+            */}
+            {display.showReasoning && toolActivity.length > 0 ? (
               <div className={styles.tools}>
                 <button
                   type="button"
@@ -616,6 +670,8 @@ function MessageItemView({
             ) : null}
 
             <div className={styles.bubbleRow}>
+              {/* 头像侧在前：助手/系统/工具的头像在左，用户消息的头像在右（见下面的收尾） */}
+              {isUser ? null : navGroup}
               {isUser ? actions : null}
               <div className={styles.bubble} data-waiting={isWaiting}>
                 {isWaiting ? (
@@ -628,27 +684,10 @@ function MessageItemView({
                 ) : (
                   <Markdown text={text} />
                 )}
-                {/*
-                  气泡侧边底部的「回到这条顶端」
-
-                  刻意不放进操作条：那一排回答的是"对这条消息做什么"（复制 / 编辑 / 删除），
-                  而这个是"我要看哪儿" —— 阅读动作，位置也就该长在**气泡自己**身上。
-                  侧边取的是操作条的**对侧**（见 module.css），两者不会挤在一起。
-                */}
-                {!editing ? (
-                  <Tooltip label="跳转到消息顶部">
-                    <button
-                      type="button"
-                      className={styles.toTop}
-                      aria-label="跳转到消息顶部"
-                      onClick={() => onJumpTo(node.id, 'top')}
-                    >
-                      <IconArrowUp size={13} />
-                    </button>
-                  </Tooltip>
-                ) : null}
               </div>
               {isUser ? null : actions}
+              {/* 用户消息的头像在右，所以这一侧收尾 */}
+              {isUser ? navGroup : null}
             </div>
 
             {/*

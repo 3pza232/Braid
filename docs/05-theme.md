@@ -44,9 +44,9 @@
 ## 主题文件
 
 - 放**项目根 `themes/*.json`**（Vite `import.meta.glob('/themes/*.json')` 收集）：
-  当前 12 个 —— 自带 6 个（`contrast` / `neon` / `ocean` / `sakura` / `sepia` / `terminal`）
-  与取自流行编辑器配色的 6 个（`tokyo-night` / `gruvbox` / `catppuccin-mocha` /
-  `catppuccin-latte` / `nord` / `solarized-light`）；
+  自带 6 个（`contrast` / `neon` / `ocean` / `sakura` / `sepia` / `terminal`）
+  与取自流行编辑器配色的 5 个（`gruvbox` / `catppuccin-mocha` / `catppuccin-latte` /
+  `nord` / `solarized-light`）。同目录那份 `README.md` 不参与收集，是给这个目录自己解释自己用的；
 - **深浅要配平**：`colorScheme` 与 `extends` 必须一致（深色只能接 `braid.dark`）——
   运行时那条路径是**按 colorScheme 找基座**的，对不上会装出一个"自称浅色的深色主题"。
   `tests/adapters/bundledThemes.test.ts` 逐份守住这条，以及 id 不重复、语义层不残缺；
@@ -58,7 +58,10 @@
 
 ### 桌面版：可拔插的主题目录
 
-打包后的应用还能从 **exe 同级的 `themes/`** 读主题（首次运行会把这 12 个示例与一份格式说明写进去）：
+打包后的应用还能从 **exe 同级的 `themes/`** 读主题。这个目录**在安装时就铺好了** ——
+安装器的 `customInstall` 宏把 `resources/themes/`（electron-builder 的 `extraResources`，
+在 asar 之外）拷到 exe 同级，不用等第一次运行（见 `electron/installer.nsh`）。
+主进程里那份 `ensureThemeDirectory()` 退居**兜底**（开发态、以及用户把整个目录删了之后）：
 
 - 放一个 `.json` 进去、重启应用 → 设置里就能选到，不必改代码、也不必重新打包；
 - 删掉文件 → 真的没了。**有运行时目录时只听目录里的**，不会退回打包进应用的示例；

@@ -15,9 +15,21 @@ copyright: Braid
 files:
   - dist/**/*
   - electron/**/*
-  # 示例主题：首次运行会拷到 exe 同级的 themes/，让用户打开那个目录就看得懂格式
+  # 示例主题（asar 内这一份是**兜底**：开发态、以及用户把 themes/ 整个删掉后再补上时用它）
   - themes/**/*
   - package.json
+
+# 示例主题的**另一份**，放在 asar 之外（`resources/themes/`）
+#
+# 【为什么要放两份】安装器读不到 asar（那是单个文件），而"装完就该有主题目录"这件事
+# 必须由安装器来做 —— 所以需要一份安装器读得到、且能直接拷走的原始文件。
+#  1. `electron/installer.nsh` 在安装结束时把它拷到 exe 同级的 `themes/`；
+#  2. 主进程把它当作示例的首选来源，asar 里那份退居兜底。
+extraResources:
+  - from: themes
+    to: themes
+    filter:
+      - '**/*'
 
 directories:
   output: release
@@ -36,6 +48,8 @@ win:
 nsis:
   # 有向导而不是"点一下直接装"：装哪儿、要不要快捷方式，用户自己定
   oneClick: false
+  # 安装结束时把示例主题铺到 exe 同级（见 electron/installer.nsh 里的 customInstall）
+  include: electron/installer.nsh
   # 按用户安装（%LOCALAPPDATA%\Programs\Braid）：不弹 UAC，对轻量工具更合适
   perMachine: false
   allowToChangeInstallationDirectory: true

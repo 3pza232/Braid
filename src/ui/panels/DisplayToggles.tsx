@@ -10,6 +10,9 @@ import { useSettingsStore } from '@ui/stores/settingsStore';
  *
  * 组件自己从 store 取数据，不接收 props —— 这样它插在哪个面板里都能用，
  * 也不会跟宿主面板的局部变量名耦合。
+ *
+ * 【为什么这里没有「显示缓存命中率」】那一项属于"信息栏显示哪些字段"，
+ * 在「设置 → 消息信息栏」里改就够了；这个快捷入口只留"看着生成过程"相关的开关。
  */
 export function DisplayToggles() {
   const display = useSettingsStore((s) => s.settings.messageDisplay);
@@ -17,18 +20,18 @@ export function DisplayToggles() {
 
   return (
     <SettingGroup title="消息显示（全局）" help="与「设置 → 消息信息栏」是同一份配置">
-      <SettingRow label="显示思考过程" help="推理模型的可折叠思考链路；关掉只是不显示">
+      <SettingRow
+        label="显示思考和工具使用过程"
+        help="思考链路与文件工具的执行过程；关掉只是不显示，内容仍然保存（导出里也在）"
+      >
         <Switch
-          label="显示思考过程"
+          label="显示思考和工具使用过程"
           checked={display.showReasoning}
           onChange={(value) => update({ messageDisplay: { showReasoning: value } })}
         />
       </SettingRow>
 
-      <SettingRow
-        label="思考过程默认展开"
-        help="开：一直展开。关：一出正文就自动折叠"
-      >
+      <SettingRow label="思考过程默认展开" help="开：一直展开。关：思考时展开、一出正文就折叠">
         <Switch
           label="思考过程默认展开"
           checked={display.reasoningDefaultExpanded}
@@ -36,19 +39,22 @@ export function DisplayToggles() {
         />
       </SettingRow>
 
-      <SettingRow label="显示缓存命中率" help="服务端上报时是精确值；估算值会带「≈」">
+      <SettingRow label="工具使用过程默认展开" help="开：一直展开。关：执行工具时展开、一出正文就折叠">
         <Switch
-          label="显示缓存命中率"
-          checked={display.metaFields.find((field) => field.id === 'cache')?.enabled ?? false}
-          onChange={(value) =>
-            update({
-              messageDisplay: {
-                metaFields: display.metaFields.map((field) =>
-                  field.id === 'cache' ? { ...field, enabled: value } : field,
-                ),
-              },
-            })
-          }
+          label="工具使用过程默认展开"
+          checked={display.toolsDefaultExpanded}
+          onChange={(value) => update({ messageDisplay: { toolsDefaultExpanded: value } })}
+        />
+      </SettingRow>
+
+      <SettingRow
+        label="跟随过程自动展开"
+        help="开：思考时展开思考框、执行工具时展开工具框，一开始说正文就都折叠（中途再思考或调用工具会再展开）。关：只由你手动开合。只影响正在生成的那条"
+      >
+        <Switch
+          label="跟随过程自动展开"
+          checked={display.followProgress}
+          onChange={(value) => update({ messageDisplay: { followProgress: value } })}
         />
       </SettingRow>
     </SettingGroup>

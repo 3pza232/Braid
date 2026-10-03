@@ -6,6 +6,7 @@ import {
   commonPrefixLength,
   estimateCacheStats,
   estimateTokens,
+  estimateUsage,
   formatCacheHitRate,
   formatTokenCount,
   isCjk,
@@ -208,5 +209,45 @@ describe('addUsage（一次工具循环的多轮用量要累加）', () => {
       addUsage(usage({ reasoningTokens: 5 }), usage({ reasoningTokens: 7 }))?.reasoningTokens,
     ).toBe(12);
     expect(addUsage(usage(), usage())?.reasoningTokens).toBeUndefined();
+  });
+});
+
+/**
+ * 流式期间的估算用量
+ *
+ * 协议上 usage 随**最后一个 chunk** 才发回，所以那一轮结束前界面上一个数都没有 ——
+ * 长回答写完要几分钟，用户会以为"没有统计"（真实反馈）。`estimateUsage` 就是
+ * 那段时间的填充物：它必须**明说自己不准确**（`estimated`，界面显示成 `≈`），
+ * 而不能冒充服务端数据 —— 与缓存命中率那套约定完全一致。
+ */
+describe('estimateUsage（流式期间的本地估算）', () => {
+  it('拼出 promptTokens + 本地估算的 completionTokens，并且**标记为估算**', () => {
+    const estimated = estimateUsage(1000, '一二三四');
+    expect(estimated.estimated).toBe(true);
+    expect(estimated.completionTokens).toBe(estimateTokens('一二三四'));
+    expect(estimated.totalTokens).toBe(1000 + estimated.completionTokens);
+  });
+
+  it('正文还是空的也能用（刚开局那一帧）', () => {
+    expect(estimateUsage(500, '').totalTokens).toBe(500);
+  });
+
+  it('与准确值相加时整体仍算估算 —— 不能用准确值把估算洗白', () => {
+    const mixed = addUsage(estimateUsage(100, '一段'), {
+      promptTokens: 200,
+      completionTokens: 50,
+      totalTokens: 250,
+    });
+    expect(mixed?.estimated).toBe(true);
+    expect(mixed?.totalTokens).toBe(100 + estimateTokens('一段') + 250);
+  });
+
+  it('两边都是准确值时，结果里不出现 estimated（界面据此不显示 ≈）', () => {
+    const sum = addUsage(
+      { promptTokens: 1, completionTokens: 2, totalTokens: 3 },
+      { promptTokens: 4, completionTokens: 5, totalTokens: 9 },
+    );
+    expect(sum?.estimated).toBeUndefined();
+    expect('estimated' in (sum ?? {})).toBe(false);
   });
 });

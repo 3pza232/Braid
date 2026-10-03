@@ -51,30 +51,6 @@ const THEME_PREFIX = '/_external-themes';
 /** 只放行长得像主题文件的名字：这是唯一能读到磁盘任意位置的口子，必须窄 */
 const THEME_FILE_NAME = /^[\w.-]+\.json$/;
 
-/** 首次运行时写进主题目录的说明（让这个目录自己解释自己） */
-const THEME_README = `# 主题目录（可拔插）
-
-放在这里的 \`.json\` 会在应用启动时被读取，出现在「设置 → 外观」。
-加一个文件就多一个主题，删掉文件就真的没了 —— 不需要改代码，也不需要重新打包。
-
-格式（\`extends\` 必填，指向内置的基础主题）：
-
-{
-  "id": "my-theme",
-  "name": "我的主题",
-  "version": "1.0.0",
-  "colorScheme": "dark",
-  "extends": "braid.dark",
-  "tokens": { "semantic": { "accent": { "default": "#FF6600" } } }
-}
-
-- \`id\` 唯一；\`colorScheme\` 取 \`light\` 或 \`dark\`（"跟随系统"时按它挑选）；
-- 只写要覆盖的 token，其余从基础主题继承；
-- 写坏了不会白屏：那个文件会被跳过，原因留在控制台里。
-
-改完主题**重启应用**生效。
-`;
-
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -91,10 +67,14 @@ const MIME = {
 };
 
 /**
- * 主题目录：不存在就建，并**只在首次**把打包进应用的示例主题与说明拷进去
+ * 主题目录：不存在就建，并**只在首次**把示例主题与说明拷进去
  *
- * 为什么带示例：用户打开这个目录要能看懂格式（看到 6 个真实文件比看文档快）。
- * 为什么只在首次：`themes/` 是用户的目录 —— 他删掉 `ocean.json` 之后，
+ * 【这一份是兜底，不是主路径】正常情况下**安装时**就已经铺好了
+ * （见 `electron/installer.nsh`：安装结束时把 `resources/themes/` 拷到 exe 同级）。
+ * 这里保留的意义是两种情形：开发态，以及用户把整个 `themes/` 删掉之后还想拿回示例。
+ *
+ * 为什么带示例：用户打开这个目录要能看懂格式（看到十来个真实文件比看文档快）。
+ * 为什么只在首次：`themes/` 是用户的目录 —— 他删掉某个主题之后，
  * 应用不该每次启动都把它塞回来（那就成了"删不掉的示例"）。
  *
  * 拷不出来只警告：主题是锦上添花，不该让应用起不来。
@@ -104,13 +84,26 @@ function ensureThemeDirectory() {
     if (fs.existsSync(THEME_DIR)) return;
     fs.mkdirSync(THEME_DIR, { recursive: true });
 
-    // 示例在打包产物里（asar 内）。读出来再写出去：跨 asar 的复制用读+写最稳。
-    const samples = path.join(__dirname, '..', 'themes');
+    /*
+     * 示例的来源，按优先级试两个位置：
+     *  1. `resources/themes/`（electron-builder 的 extraResources，在 asar 之外）——
+     *     安装器用的就是它，主进程也优先用它；
+     *  2. asar 里那份（`files` 里也打进了包）—— 开发态或配置变化时的兜底。
+     * 跨 asar 的复制用"读出来再写出去"最稳，所以两条路径共用同一段循环。
+     */
+    const samples = [path.join(process.resourcesPath, 'themes'), path.join(__dirname, '..', 'themes')]
+      .find((dir) => fs.existsSync(dir));
+
+    if (!samples) {
+      console.warn('[themes] 没找到示例主题的来源（打包配置变了吗？）');
+      return;
+    }
+
     for (const name of fs.readdirSync(samples)) {
-      if (!name.endsWith('.json')) continue;
+      // 只搬"主题文件"与那份说明；目录里其它东西（例如将来放别的）不去动它
+      if (!name.endsWith('.json') && name !== 'README.md') continue;
       fs.writeFileSync(path.join(THEME_DIR, name), fs.readFileSync(path.join(samples, name)));
     }
-    fs.writeFileSync(path.join(THEME_DIR, 'README.md'), THEME_README, 'utf8');
   } catch (error) {
     console.warn(`[themes] 主题目录准备失败（不影响其它功能）：${String(error)}`);
   }

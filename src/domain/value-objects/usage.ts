@@ -14,6 +14,16 @@ export interface TokenUsage {
    * 界面必须把两者**区分显示**，不能把估算值冒充成服务端数据。
    */
   cacheSource?: CacheKind;
+  /**
+   * 整份用量是**本地估算**的（服务商还没给）
+   *
+   * 流式期间拿不到准确值：按 OpenAI 兼容协议，usage 随**最后一个 chunk** 才发回，
+   * 所以那段时间只能按字数先估一个，让用户看到数字在涨；
+   * 每轮请求一结束就用准确值替换掉（见 `ChatService` 的 `estimateLiveUsage`）。
+   *
+   * 与 `cacheSource` 同一条纪律：**估算绝不能冒充服务端数据**，界面必须区分显示。
+   */
+  estimated?: boolean;
   totalTokens: number;
 }
 
@@ -53,6 +63,27 @@ export function cacheHitRate(stats: CacheStats): number {
 /** 命中率的中文显示，例如 `78%` */
 export function formatCacheHitRate(stats: CacheStats): string {
   return `${Math.round(cacheHitRate(stats) * 100)}%`;
+}
+
+/**
+ * 只用本地估算拼一份用量（流式期间用，界面必须显示成 `≈`）
+ *
+ * 【为什么需要它】准确值要等这一轮请求结束才到（协议如此：usage 随最后一个 chunk 发回）。
+ * 在那之前给界面一个"在涨"的数 —— 否则用户要盯着一个空白等到整个回答写完，
+ * 看起来就像"没有统计"（真实反馈）。
+ *
+ * 【参数为什么是分开的】提示词那一部分**一轮之内不变**，只需在轮首算一次；
+ * 每 120ms 的 flush 只需要重算"这一轮又吐了多少字"（小、便宜）。
+ * 调用方据此避免每帧去扫一遍上万字的 prompt（见 `ChatService.estimateLiveUsage`）。
+ */
+export function estimateUsage(promptTokens: number, completionText: string): TokenUsage {
+  const completionTokens = estimateTokens(completionText);
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens: promptTokens + completionTokens,
+    estimated: true,
+  };
 }
 
 /**
@@ -124,10 +155,14 @@ export function addUsage(
       ? undefined
       : (a.reasoningTokens ?? 0) + (b.reasoningTokens ?? 0);
 
+  // 只要有一段是估算的，整体就只能算估算 —— 不能用准确值把估算"洗白"（同 cacheSource）
+  const estimated = a.estimated || b.estimated;
+
   return {
     promptTokens: a.promptTokens + b.promptTokens,
     completionTokens: a.completionTokens + b.completionTokens,
     totalTokens: a.totalTokens + b.totalTokens,
+    ...(estimated !== undefined ? { estimated } : {}),
     // 只要有一轮是估算的，整体就只能算估算 —— 不能用精确值把估算"洗白"
     ...(a.cacheSource === 'estimated' || b.cacheSource === 'estimated'
       ? { cacheSource: 'estimated' as const }

@@ -26,11 +26,11 @@ export function DisplaySection({ settings, update }: DisplaySectionProps) {
         />
       </SettingRow>
       <SettingRow
-        label="显示思考过程"
-        help="推理模型会在回复上方给出可折叠的思考链路；关掉只是不显示，内容仍会保存"
+        label="显示思考和工具使用过程"
+        help="思考链路与文件工具的执行过程；关掉只是不显示，内容仍会保存（导出里也在）"
       >
         <Switch
-          label="显示思考过程"
+          label="显示思考和工具使用过程"
           checked={settings.messageDisplay.showReasoning}
           onChange={(value) => update({ messageDisplay: { showReasoning: value } })}
         />
@@ -42,6 +42,28 @@ export function DisplaySection({ settings, update }: DisplaySectionProps) {
           onChange={(value) => update({ messageDisplay: { reasoningDefaultExpanded: value } })}
         />
       </SettingRow>
-    </SettingGroup>
+
+      <SettingRow
+        label="工具使用过程默认展开"
+        help="与「思考过程默认展开」对称：开了一直展开，关了则执行工具时展开、一出正文就折叠"
+      >
+        <Switch
+          label="工具使用过程默认展开"
+          checked={settings.messageDisplay.toolsDefaultExpanded}
+          onChange={(value) => update({ messageDisplay: { toolsDefaultExpanded: value } })}
+        />
+      </SettingRow>
+
+      <SettingRow
+        label="跟随过程自动展开"
+        help="开：思考时展开思考框、执行工具时展开工具框，一开始说正文就都折叠（中途再思考或调用工具会再展开）。关：只由你手动开合。只影响正在生成的那条"
+      >
+        <Switch
+          label="跟随过程自动展开"
+          checked={settings.messageDisplay.followProgress}
+          onChange={(value) => update({ messageDisplay: { followProgress: value } })}
+        />
+      </SettingRow>
+      </SettingGroup>
   );
 }

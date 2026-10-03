@@ -64,6 +64,7 @@ export function MessageList() {
   const regenerate = useChatStore((s) => s.regenerate);
   const continueWriting = useChatStore((s) => s.continueWriting);
   const continuableMessageId = useChatStore((s) => s.continuableMessageId);
+  const streamPhase = useChatStore((s) => s.streamPhase);
   const selectVariant = useChatStore((s) => s.selectVariant);
   const locate = useChatStore((s) => s.locate);
   const searchHits = useChatStore((s) => s.searchHits);
@@ -492,6 +493,15 @@ export function MessageList() {
                * 它们的 memo 不会被这一个按钮废掉（同 autoExpandReasoning 的理由）
                */
               canContinue={continuableMessageId === node.id}
+              /*
+               * 只有正在生成的那一条关心阶段，其余一律给 null
+               *
+               * 阶段一变就重渲染是应该的；但若把同一个值传给所有消息，
+               * 它的每次变化都会让整列的 `memo` 判为"props 变了" —— 白白重渲染一屏。
+               * 判据用消息自己的 `status`：它就是"这一条在不在生成"，
+               * 与组件内部那条规则同一个来源，不必再比对 id。
+               */
+              streamPhase={node.status === 'streaming' ? streamPhase : null}
             />
           );
         })}

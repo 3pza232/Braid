@@ -199,6 +199,15 @@ npm run build    # verify + 构建
 否则前面几轮花掉的量会被一次覆盖吃掉、显示偏小。用例：
 `tests/application/continuationEngine.test.ts` 里那条"用量是整条消息的总和"。
 
+**流式期间那个数字是估算的**（界面显示 `≈`）：准确值随最后一个 chunk 才到，所以每 120ms 的 flush
+会写一份"已收工轮次的准确值 + 这一轮的估算"，这一轮结束后换成准确值。估算必须带
+`TokenUsage.estimated` —— 与缓存命中率同一套纪律：**估算不能冒充服务端数据**。
+用例：`tests/application/streamPhase.test.ts`。
+
+**过程面板的自动开合看"当前阶段"，不看"有没有东西在跑"**（`ChatSnapshot.streamPhase`，
+规则在 `ui/utils/panelVisibility.ts`）。改坏它的两个典型症状：续写的第二轮又开始思考却不展开、
+工具框一闪而过（因为写文件只要几十毫秒）。详见 [08-ui.md](./08-ui.md)。
+
 ## 打包 exe：两个环境坑（都踩过）
 
 `npm run dist:win` 在本机第一次跑会撞到下面两条，都不是配置问题：
@@ -248,11 +257,18 @@ npm run build    # verify + 构建
 - 主进程把那个目录端在 `/_external-themes`（渲染进程没有 Node 权限，只能这样给它）：
   `index.json` 给清单、`/<名字>.json` 给单个文件，名字必须过 `^[\w.-]+\.json$` 白名单
   （这是唯一能读到磁盘任意位置的口子）；
-- 目录位置：安装版取 `exe 所在目录`；便携版取 `PORTABLE_EXECUTABLE_DIR`
-  （便携 exe 会把自己解到临时目录，`getPath('exe')` 指的是那份临时副本，
-  往那儿写东西用户一关就没了）；开发态直接用仓库里的 `themes/`；
-- 首次运行会把打包的示例主题与一份 `README.md` 写进去，**之后不再覆盖** ——
-  它是用户的目录，删掉的示例不该每次启动又被塞回来；
+- 目录位置：安装版取 `exe 所在目录`，开发态直接用仓库里的 `themes/`
+  （便携版已经不做；真要加回来记得它得看 `PORTABLE_EXECUTABLE_DIR` ——
+  便携 exe 把自己解到临时目录，`getPath('exe')` 指的是那份临时副本）；
+- **安装时就把示例铺好**（不必先跑一次程序）：`electron/installer.nsh` 的 `customInstall`
+  把 `resources/themes/`（`extraResources` 放在 asar 之外，安装器读得到）拷到 exe 同级，
+  连同那份 `README.md`。**只在目录空着时才拷** —— 升级安装不能覆盖用户改过的主题、
+  也不能把他删掉的示例塞回来；
+- 主进程的 `ensureThemeDirectory()` 退居**兜底**（开发态、或用户把目录整个删了）：
+  同样只在目录不存在时补一次，**之后不再覆盖** —— 它是用户的目录，删掉的示例不该每次启动又被塞回来。
+  示例来源优先 `process.resourcesPath/themes`，其次 asar 里那份；
+- **卸载会把 `themes/` 一起删掉**（它在安装目录里），自己攒的主题要先拷出来。
+  用户数据（会话）在 `%APPDATA%\Braid`，不受影响（`nsis.deleteAppDataOnUninstall: false`）；
 - **有运行时目录时只听目录里的**（`loadRuntimeThemes` 返回 `null` = 没有目录 → 用打包的；
   `[]` = 目录是空的 → 一个外置主题都没有）。合并两种来源会让"删了却还在"变成无解的问题；
 - 它在挂载 React **之前**加载（`main.tsx`）：主题注册表不通知订阅者，

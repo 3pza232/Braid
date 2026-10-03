@@ -108,6 +108,7 @@ export const useChatStore = create<ChatState>((set) => {
     conversation: createEmptyConversation(asConversationId('pending'), 0),
     tree: { nodes: [], activeRootChildId: null },
     streamingMessageId: null,
+    streamPhase: null,
     continuableMessageId: null,
     contextNote: null,
     // 装载前当作"还没有落库问题"；服务会用真实状态覆盖它

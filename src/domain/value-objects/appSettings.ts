@@ -134,10 +134,35 @@ export interface MessageDisplaySettings {
   /** 数组顺序 = 显示顺序（界面可拖动调整） */
   metaFields: MetaFieldSettings[];
   actionBarTrigger: 'hover' | 'always';
-  /** 是否显示模型的思考链路（reasoning）。关掉后思考内容仍会被保存，只是不展示 */
+  /**
+   * 是否显示"过程"：模型的思考链路 **+ 文件工具的执行过程**
+   *
+   * 【字段名保留 `showReasoning` 不改，是为了避免一次设置迁移】它现在管两件事，
+   * 但改名要动 schema 版本与归一化，而它只是一个布尔 —— 那个代价不值。
+   * 关掉后两者都只是**不展示**：思考文本与工具结果仍然完整保存，
+   * 导出与数据库里都在（与"关掉只是不显示"的既有语义一致）。
+   */
   showReasoning: boolean;
   /** 思考链路的初始展开状态（用户点过之后以用户的选择为准） */
   reasoningDefaultExpanded: boolean;
+  /**
+   * 「工具使用过程默认展开」
+   *
+   * 与「思考过程默认展开」对称：开了就常展开、**不随阶段折叠**。
+   * 默认关 = 跟随阶段（执行工具时展开、一开始说正文就折叠）。
+   */
+  toolsDefaultExpanded: boolean;
+  /**
+   * 跟随过程自动展开（总开关，默认开）
+   *
+   * 开：生成过程中自动展开对应的过程面板 —— 思考时展开思考框、执行工具时展开工具框，
+   * 一开始说正文就两个都折叠；中途再思考 / 再调用工具就再展开（按轮判断）。
+   * 关：两块面板都不再自动开合，打开与关闭只由用户自己点。
+   *
+   * **只管正在生成的那条**：历史消息一律默认收起 —— 否则翻旧对话时每条老消息的
+   * 展开状态都不一样，版面会很跳。
+   */
+  followProgress: boolean;
 }
 
 /**
@@ -331,6 +356,11 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     actionBarTrigger: 'hover',
     showReasoning: true,
     reasoningDefaultExpanded: false,
+    // 默认关 = 跟随阶段（执行工具时展开、开始说正文就折叠）。
+    // 打开它等于"我就是要一直看着工具在干什么"，那时不再和阶段较劲
+    toolsDefaultExpanded: false,
+    // 默认跟随：这是"看得见它在干什么"的那条路径，关掉反而失去了过程可见性
+    followProgress: true,
   },
   appearance: {
     contentFontSize: 'base',

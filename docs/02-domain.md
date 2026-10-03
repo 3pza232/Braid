@@ -113,7 +113,13 @@ activePathIdsOf(links, activeRootChildId)   // 只需要三列指针（跨会话
   产出 `hitTokens` / `missTokens`；
 - `cacheStatsOf` / `cacheHitRate` / `formatCacheHitRate` —— 区分"服务端上报"与"本地估算"，
   界面据此显示 `78%` 还是 `≈78%`（这是两件不同的事，混淆过一次）；
-- `addUsage` —— 累加。
+- `estimateUsage(promptTokens, completionText)` —— **流式期间的估算用量**：协议上准确的 usage
+  随最后一个 chunk 才发回，所以一轮结束前界面上一个数都没有（长回答要几分钟，看起来像"没有统计"）。
+  它产出的用量带 `estimated: true`，界面显示成 `≈12.3K tokens`，每轮结束时被准确值替换；
+- `addUsage` —— 累加。**只要有一段是估算的，结果就是估算的**（`estimated` 与 `cacheSource` 同一套纪律：
+  估算不能冒充服务端数据）。
+
+> 界面上的口径：`≈` 只意味着"服务商还没告诉我们"，它同时是"这一轮还在写"的信号。
 
 ## 设置的 schema 版本与归一化
 

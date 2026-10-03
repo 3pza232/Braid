@@ -38,7 +38,7 @@ import type { AppSettings } from '@domain/value-objects/appSettings';
 import { activeSummaryOf } from '@domain/value-objects/contextSummary';
 import { effectiveMaxOutput } from '@domain/value-objects/sampling';
 import type { TokenUsage } from '@domain/value-objects/usage';
-import { addUsage } from '@domain/value-objects/usage';
+import { addUsage, estimateTokens, estimateUsage } from '@domain/value-objects/usage';
 import {
   buildProviderMessages,
   changedNodes,
@@ -53,6 +53,7 @@ import type {
   ChatSnapshot,
   ContextCompressionReport,
   EditSubmitMode,
+  StreamPhase,
 } from '@ports/ChatApi';
 import type { LLMProvider } from '@ports/LLMProvider';
 import type { ConversationStore } from '@ports/repositories/ConversationStore';
@@ -189,6 +190,15 @@ export class ChatService implements ChatApi {
   private continuableId: MessageId | null = null;
 
   /**
+   * 正在生成的那条消息**此刻处于哪个阶段**（见 `StreamPhase`）
+   *
+   * 与 `streamingId` 同一条纪律：它描述的是**此刻**，所以不落库、只挂在快照上送到界面。
+   * 界面据此自动展开 / 折叠过程面板：思考中展开思考框、执行工具时展开工具框、
+   * 一开始说正文两块都折叠 —— 中途再思考 / 再调用工具就再展开（按轮更新）。
+   */
+  private streamPhase: StreamPhase | null = null;
+
+  /**
    * 每个会话「上一次请求的 prompt 序列化结果」
    *
    * 只用于缓存命中估算（服务端没给缓存字段时的兜底），因此**不持久化**：
@@ -258,6 +268,7 @@ export class ChatService implements ChatApi {
       conversation: this.getActiveConversation(),
       tree: this.getActiveTree(),
       streamingMessageId: this.streamingId,
+      streamPhase: this.streamPhase,
       continuableMessageId: this.continuableId,
       contextNote: this.contextNote,
       context: this.context.status(),
@@ -731,6 +742,8 @@ export class ChatService implements ChatApi {
     this.abortController = controller;
     this.streamingId = messageId;
     this.streamingConversationId = conversationId;
+    // 还没有任何事件：阶段先清空（第一个 delta / reasoning 事件会把它定下来）
+    this.streamPhase = null;
     /*
      * 新一轮开始 → 上一条"等你继续"的邀请作废
      *
@@ -936,9 +949,13 @@ export class ChatService implements ChatApi {
           switch (event.kind) {
             case 'delta':
               text += event.text;
+              // 正文开始往外出 → 过程面板该让位（界面的自动折叠就是看这个）
+              this.streamPhase = 'text';
               break;
             case 'reasoning':
               reasoning += event.text;
+              // 又开始思考（可能是这一轮，也可能是续写的下一轮）→ 思考框重新展开
+              this.streamPhase = 'reasoning';
               break;
             case 'tool_call':
               calls.push(event.call);
@@ -956,7 +973,21 @@ export class ChatService implements ChatApi {
           if (now - lastFlush < STREAM_FLUSH_MS) continue;
           lastFlush = now;
 
-          this.applyStreamContent(conversationId, messageId, text, reasoning, now, settled);
+          this.applyStreamContent(
+            conversationId,
+            messageId,
+            text,
+            reasoning,
+            now,
+            settled,
+            /*
+             * 每帧都带一份用量：**已收工轮次的准确值 + 这一轮的估算**
+             *
+             * 不带的话，整条回答写完之前那个数字是空的 —— 而多轮长文可能要几分钟。
+             * 这一轮的准确值到手后（`case 'usage'`）会被替换掉，见 `estimateLiveUsage`。
+             */
+            this.estimateLiveUsage(usage, promptText, `${text}${reasoning}`),
+          );
 
           if (now - lastPersist >= STREAM_PERSIST_MS) {
             lastPersist = now;
@@ -981,8 +1012,17 @@ export class ChatService implements ChatApi {
           {
             run: (call) => this.tools.run(call),
             show: (segments) => {
-              this.applyStreamContent(conversationId, messageId, '', '', Date.now(), segments);
-              this.emit();
+              /*
+               * 工具阶段：界面据此展开「文件工具」面板
+               *
+               * 这一步发生在**执行之前**（见 `runToolRound` 的固化顺序），
+               * 所以用户在文件被写之前就看到"要动哪个文件"了。
+               * 阶段会一直保持到模型重新开口（正文或思考），那时面板才折叠 ——
+               * 工具跑得快，按"执行完就折叠"会让它一闪而过（真实现象）。
+               */
+              this.streamPhase = 'tool';
+              // 这一轮的 usage 已经到手 → 用准确值，工具执行期间数字不该来回跳
+              this.applyStreamContent(conversationId, messageId, '', '', Date.now(), segments, usage);
             },
             persist: () => void this.persistMessage(conversationId, messageId),
             aborted: () => controller.signal.aborted,
@@ -1090,6 +1130,8 @@ export class ChatService implements ChatApi {
     this.abortController = null;
     this.streamingId = null;
     this.streamingConversationId = null;
+    // 收工了就没有"此刻"：过程面板回到默认的收起状态（面板本身还在，用户随时能点开）
+    this.streamPhase = null;
     /*
      * 挂上"等你继续"（只有真的停在"还能再写一轮"时才挂）
      *
@@ -1112,6 +1154,43 @@ export class ChatService implements ChatApi {
     });
   }
 
+  /**
+   * 流式期间界面该显示的用量：**已收工轮次的准确值 + 这一轮的估算**
+   *
+   * 【为什么要估算】按 OpenAI 兼容协议，usage 随**最后一个 chunk** 才发回 ——
+   * 所以一整条长回答写完之前一个数都没有，界面上那一项干脆不显示，
+   * 用户会以为"没有统计"（真实反馈）。估算只负责在那之前让它涨起来；
+   * 每轮结束时那一轮自动换成服务商的准确值。
+   *
+   * 【为什么提示词那一半单独算】它一轮之内不变，`promptTokensOf` 记忆住了；
+   * 每帧只需要重算这一轮已经吐了多少字（正文 + 思考都很短，便宜）。
+   */
+  private estimateLiveUsage(
+    settledUsage: TokenUsage | undefined,
+    promptText: string,
+    liveText: string,
+  ): TokenUsage {
+    const round = estimateUsage(this.promptTokensOf(promptText), liveText);
+    return addUsage(settledUsage, round) ?? round;
+  }
+
+  /**
+   * 这一轮提示词的估算 token 数（按**内容**记忆，变了才重算）
+   *
+   * 不记忆的话，每 120ms 就要把整段 prompt（长文会话里几万到上百万字符）逐字扫一遍 ——
+   * 那是白费的开销：一轮之内它根本不变。比较是按值比较，同一轮里是同一个字符串实例，
+   * 命中时几乎零成本。
+   */
+  private promptTokensOf(promptText: string): number {
+    if (this.promptTokenCache?.text === promptText) return this.promptTokenCache.tokens;
+    const tokens = estimateTokens(promptText);
+    this.promptTokenCache = { text: promptText, tokens };
+    return tokens;
+  }
+
+  /** `promptTokensOf` 的记忆（见它的说明） */
+  private promptTokenCache: { text: string; tokens: number } | null = null;
+
   /** 只更新内存并通知界面（不落库）——每次 flush 走这条路 */
   private applyStreamContent(
     conversationId: ConversationId,
@@ -1120,6 +1199,13 @@ export class ChatService implements ChatApi {
     reasoning: string,
     now: number,
     settled: readonly MessageSegment[] = [],
+    /**
+     * 这次 flush 时界面该显示的用量
+     *
+     * 传的是**估算值**（含已收工轮次的准确部分，见 `estimateLiveUsage`）。
+     * 定稿时会整份换成准确值（`finalizeStream`），所以这里只是"过程中的样子"。
+     */
+    usage?: TokenUsage,
   ): void {
     const tree = this.threads.get(conversationId);
     if (!tree) return;
@@ -1128,7 +1214,10 @@ export class ChatService implements ChatApi {
       ...tree,
       nodes: tree.nodes.map((node) =>
         node.id === messageId
-          ? withStreamedContent(node, text, reasoning, now, settled)
+          ? {
+              ...withStreamedContent(node, text, reasoning, now, settled),
+              ...(usage ? { usage } : {}),
+            }
           : node,
       ),
     });
