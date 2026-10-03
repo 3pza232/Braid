@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { ChatService } from '@app/chat/ChatService';
-import { createWorkspaceToolRegistry } from '@app/tools/workspaceToolRegistry';
 import { DEFAULT_APP_SETTINGS, type AppSettings } from '@domain/value-objects/appSettings';
 import { estimateTokens } from '@domain/value-objects/usage';
 import { ok } from '@shared/result';
 import type { ChatStreamEvent } from '@ports/LLMProvider';
 import type { SettingsApi } from '@ports/SettingsApi';
-import { createFakeProvider, createFakeWorkspace, createStores } from '../helpers/chatHarness';
+import { createFakeProvider, createNoToolRegistry, createStores } from '../helpers/chatHarness';
 
 /**
  * 上下文压缩（compaction）—— 集成测试
@@ -17,8 +16,15 @@ import { createFakeProvider, createFakeWorkspace, createStores } from '../helper
  * 这类"库存在但没接线"的问题，只有端到端发一次请求才能发现。
  */
 
-/** 一"轮"的内容：300 个汉字 ≈ 510 token，用来快速把上下文顶起来 */
-const turnText = (label: string) => `${label}内容`.repeat(60);
+/**
+ * 一"轮"的内容：500 个汉字 ≈ 350 token，用来快速把上下文顶起来
+ *
+ * 【为什么是 500 而不是早先的 300】长度得同时满足两件事：四轮历史要**超过压缩门槛**
+ * （域规则里的 `MIN_COVERED_TOKENS = 800`，且 `keepRecentMessages: 1` 会留一轮不压），
+ * 以及预算能把它圈进"该压缩但没到硬上限"的窗口。早先那 300 是按旧系数（汉字 ×1.7）
+ * 配的，估算一校准就整体缩水 2.4 倍，"够长"变得不够长。
+ */
+const turnText = (label: string) => `${label}内容`.repeat(100);
 
 const done = (text: string): ChatStreamEvent[] => [
   { kind: 'delta', text },
@@ -34,8 +40,15 @@ async function waitIdle(service: ChatService): Promise<void> {
 
 function build(context: Partial<AppSettings['context']>, rounds: number) {
   const { store, messages } = createStores();
-  const workspace = createFakeWorkspace();
-  const tools = createWorkspaceToolRegistry(workspace.api);
+  /*
+   * 刻意不发工具声明
+   *
+   * 这里量的是压缩算术：每条用例的预算都照着"内容 + 系统提示词"现算。而工具声明那份
+   * JSON 是**每个请求固定多出**的一份开销（实测 3 个工具 ≈ 353 token），它一进来，
+   * 这些"刚好卡在线上"的数字就集体越过硬上限 —— 本该"到线就压"变成"直接拦下"。
+   * 那份开销由 `contextBudgetRefresh.test.ts` 与域层用例专门钉，见替身的说明。
+   */
+  const tools = createNoToolRegistry();
   const { provider, requests, compressions } = createFakeProvider(
     Array.from({ length: rounds }, (_, index) => done(`第${index + 1}轮回答`)),
   );
@@ -64,10 +77,15 @@ function build(context: Partial<AppSettings['context']>, rounds: number) {
 /**
  * 造一段"已经把上下文顶到触发线附近"的历史
  *
- * 预算 2200、触发线 85% = 1870；四轮各约 519 token → 约 2076：
- * 落在 [1870, 2200) 里，正好是"该压缩但还没到硬上限"的窗口。
+ * 预算取"四轮历史的 1.15 倍"，触发线 85% —— 于是四轮历史（≈ 4 × 每轮）正好落在
+ * [触发线, 上限) 里，即"该压缩但还没到硬上限"的窗口。
+ *
+ * 【为什么按估算函数现算，而不是写死 2200】早先那个数是按旧系数（汉字 ×1.7）配的，
+ * 估算一校准，同样的历史只算三分之一，触发线再也够不着 —— 用例红一片，
+ * 而它想表达的其实只是"刚好顶到线附近"这件事。写死数字对系数变动是脆的。
  */
-const NEAR_FULL = { maxContextTokens: 2200, compressAt: 0.85 };
+const HISTORY_TOKENS = estimateTokens(turnText('第一轮')) * 4;
+const NEAR_FULL = { maxContextTokens: Math.round(HISTORY_TOKENS * 1.15), compressAt: 0.85 };
 
 async function fillHistory(service: ChatService): Promise<void> {
   for (const label of ['第一轮', '第二轮', '第三轮', '第四轮']) {
@@ -143,7 +161,16 @@ describe('不压缩（compression: off）', () => {
 
   it('超出上限时拦住发送，并说清楚下一步怎么做', async () => {
     const { service, requests } = build(
-      { maxContextTokens: 100, compression: 'off', compressAt: 0.85, keepRecentMessages: 1 },
+      /*
+       * 预算小到"一条消息本身就装不下"：断言的是**拦住发送**这条路径。
+       * 同样按估算函数现算 —— 写死 100 的话，校准后连一条消息都塞得下了，用例就失去意义。
+       */
+      {
+        maxContextTokens: Math.round(estimateTokens(turnText('第一轮')) * 0.4),
+        compression: 'off',
+        compressAt: 0.85,
+        keepRecentMessages: 1,
+      },
       1,
     );
     await service.load();
@@ -168,7 +195,16 @@ describe('不压缩（compression: off）', () => {
 
   it('提示里给出"压缩或调大上限"这两条可执行的路', async () => {
     const { service } = build(
-      { maxContextTokens: 100, compression: 'off', compressAt: 0.85, keepRecentMessages: 1 },
+      /*
+       * 预算小到"一条消息本身就装不下"：断言的是**拦住发送**这条路径。
+       * 同样按估算函数现算 —— 写死 100 的话，校准后连一条消息都塞得下了，用例就失去意义。
+       */
+      {
+        maxContextTokens: Math.round(estimateTokens(turnText('第一轮')) * 0.4),
+        compression: 'off',
+        compressAt: 0.85,
+        keepRecentMessages: 1,
+      },
       1,
     );
     await service.load();
@@ -214,8 +250,8 @@ describe('手动压缩（顶栏菜单的按钮）', () => {
 
   it('压缩失败（模型拒绝/网络问题）时不留半成品', async () => {
     const { store, messages } = createStores();
-    const workspace = createFakeWorkspace();
-    const tools = createWorkspaceToolRegistry(workspace.api);
+    // 同 `build`：不发工具声明，别让那份固定开销来挪预算（见 `build` 的说明）
+    const tools = createNoToolRegistry();
     const { provider, compressions } = createFakeProvider(
       Array.from({ length: 4 }, (_, index) => done(`第${index + 1}轮回答`)),
       { completeFails: true },
@@ -250,9 +286,10 @@ describe('顶栏显示的口径', () => {
     await fillHistory(service);
 
     const status = service.snapshot().context;
-    // 四轮 × (300 汉字 + 短回答) ≈ 2000 上下，绝不该出现"整棵树被算了两遍"的浮夸数字
+    // 四轮 ×（500 汉字 + 短回答）≈ 1500，绝不该出现"整棵树被算了两遍"的浮夸数字
     expect(status.usedTokens).toBeLessThan(estimateTokens(turnText('第一轮')) * 4 + 500);
-    expect(status.budget).toBe(2200);
-    expect(status.ratio).toBeCloseTo(status.usedTokens / 2200, 5);
+    // 预算就是夹具给的上限（这个夹具把「单轮输出上限」设成 0，见 build()）
+    expect(status.budget).toBe(NEAR_FULL.maxContextTokens);
+    expect(status.ratio).toBeCloseTo(status.usedTokens / NEAR_FULL.maxContextTokens, 5);
   });
 });

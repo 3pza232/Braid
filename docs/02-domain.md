@@ -108,7 +108,26 @@ activePathIdsOf(links, activeRootChildId)   // 只需要三列指针（跨会话
 
 `value-objects/usage.ts`：
 
-- `estimateTokens` —— 按字符类别估算（CJK 与拉丁字符的换算比不同，见 `CHAR_TO_TOKEN_RATIO` / `isCjk`）；
+- `estimateTokens` —— 按字符类别估算（CJK 与拉丁字符的换算比不同，见 `CHAR_TO_TOKEN_RATIO` / `isCjk`）。
+  **系数是拿官方 tokenizer 量出来的**，不是凭经验拍的：汉字 0.7 / 拉丁 0.25（`tokenizer.json`
+  实测：汉字散句 0.73 token/字、常见词 0.42、中文标点 0.73、英文散文 0.21、代码 0.30、数字 0.54）。
+  早先用的 1.7 来自"1 字约 1.5~1.7 token"这个**旧一代 tokenizer** 的说法，实测
+  **平均高估 89%**（中文小说 +145%）。它一个系数喂着三处 —— 上下文预算、压缩触发线、
+  界面上的"约 N token"—— 所以那三处一起偏大 2.4 倍（表现为"动不动就压缩、白丢历史"）。
+  固定这批实测值的用例：`tests/domain/tokenEstimateCalibration.test.ts`。
+  **这是一份"按语言统计"的估算，不是某个模型的词表**：各家 tokenizer 不同，
+  要精确只能拿那个模型自己的 `tokenizer.json`（好在我们只在服务商还没回报用量时用它）；
+- `estimateTokens` 之外还有一笔**不在提示词里、但每次都要发**的东西：请求的 `tools` 字段
+  （工具声明的 JSON：名字 / 描述 / 参数 schema）。工作区里工具信息发**两份** ——
+  系统提示词里那段文字说明（`promptSection()`，一直有算）与这份 schema。按 OpenAI 兼容协议
+  后者同样计入 `prompt_tokens`，**实测 3 个工具 ≈ 353 token**，而这里早先整份漏算。
+  长对话里它只差零点几个百分点，短对话上却能偏低七成 —— 而且方向是危险的那侧
+  （以为还有余量 → 请求直接撞上游上限）。现在由 `ContextUsageInput.toolSpecTokens`
+  相加，值由 `ChatService.toolSpecTokens()` 提供（按 JSON 内容记忆，顶栏每次刷都要现算）。
+  **同一处口径也用于请求组装**（`toolSpecTokensOf`）：`planContext` 的裁剪目标要先扣掉它，
+  否则"裁一下就能发"的情形会被闸门误拦；
+  用例：`tests/domain/contextCompression.test.ts`（公式）、
+  `tests/application/contextBudgetRefresh.test.ts`（接线：有声明与没声明两个服务相减）；
 - `estimateCacheStats(previousPrompt, currentPrompt)` —— 提示词缓存的**最长公共前缀**模型，
   产出 `hitTokens` / `missTokens`；
 - `cacheStatsOf` / `cacheHitRate` / `formatCacheHitRate` —— 区分"服务端上报"与"本地估算"，

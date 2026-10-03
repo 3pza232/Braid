@@ -51,7 +51,7 @@ export function effectiveMaxOutput(params: SamplingParams): number {
 }
 
 /**
- * 单次输出上限的**天花板**（不是默认值）
+ * 「单轮输出上限」的**天花板**（不是默认值）
  *
  * 【为什么从 65,536 放到 100 万】
  * 65,536 是好几年前的口径。现在动辄几十万输出 token 的模型已经不罕见

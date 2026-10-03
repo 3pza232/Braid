@@ -1,4 +1,5 @@
 import type { FinishReason, MessageSegment, MessageStatus } from '@domain/entities/message';
+import { SAMPLING_CONSTRAINTS } from '@domain/value-objects/sampling';
 import { FAILURE_MARK, appendFailure } from '@app/chat/messageAssembly';
 import type { AppError } from '@shared/result';
 
@@ -12,7 +13,7 @@ import type { AppError } from '@shared/result';
  *    `status: 'error'`，还会往正文里追一行「⚠️ 已停止生成」—— 明明是自己按的，
  *    看起来却像出了故障，而且那行字永久留在消息里再也去不掉；
  *  - **只出了思考、没有正文时要说明**。推理模型偶尔把整段回答写进思考、正文一个
- *    token 都不给（典型触发是思考占满单次输出上限）；此时界面是一个空气泡，
+ *    token 都不给（典型触发是思考占满了「单轮输出上限」）；此时界面是一个空气泡，
  *    用户只能怀疑"是不是卡住了"；
  *  - **判断"有没有正文"要连已定稿的段一起看**：续写与工具轮的正文在 `settled` 里，
  *    只看本轮累积的 `text` 会把"正常写了几轮"误判成"什么都没写"。
@@ -37,9 +38,18 @@ export interface StreamOutcome {
   finishReason: FinishReason;
 }
 
+/*
+ * 设置项的名字取自**同一处定义**（`SAMPLING_CONSTRAINTS.maxTokens.label`），不写死
+ *
+ * 这里最初写的是改名前的老名字「单次最大输出」，改名时漏了它 —— 于是用户看到的
+ * 提示指着一个界面上已经不存在的选项（同一类漏改在工具提示词里也有过一处）。
+ * 引用常量之后，"改个名要记得同步几处"这件事就不用靠记性了。
+ */
+const MAX_OUTPUT_LABEL = SAMPLING_CONSTRAINTS.maxTokens.label;
+
 const ONLY_REASONING_NOTE =
   `${FAILURE_MARK} 本轮模型只输出了思考过程，没有输出正文` +
-  `（常见原因是思考占满了单次输出上限）。点「重新生成」，或把「单次最大输出」调大一些再试。`;
+  `（常见原因是思考占满了「${MAX_OUTPUT_LABEL}」）。点「重新生成」，或把它调大一些再试。`;
 
 export function classifyStreamOutcome(input: StreamOutcomeInput): StreamOutcome {
   const hasText =

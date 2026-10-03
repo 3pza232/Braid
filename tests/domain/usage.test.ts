@@ -25,9 +25,14 @@ describe('estimateTokens（全应用唯一的字符↔token 换算）', () => {
     expect(estimateTokens('')).toBe(0);
   });
 
-  it('汉字按 1.7 倍计（保守高估，避免预算打满）', () => {
-    expect(estimateTokens('你好')).toBe(4); // ceil(2 × 1.7)
-    expect(estimateTokens('你好你好')).toBe(7); // ceil(4 × 1.7)
+  it('汉字按 0.7 倍计（贴着实测的散文档，略偏保守）', () => {
+    /*
+     * 早先是 1.7（"1 字约 1.5~1.7 token"那个旧说法），实测平均高估 89%（见 usage.ts 里的表）。
+     * 现在按官方 tokenizer 量出来的 0.7。别按"感觉"把它调大 —— 预算、压缩触发线、
+     * "每轮约多少字"全都吃这个系数。
+     */
+    expect(estimateTokens('你好')).toBe(2); // ceil(2 × 0.7)
+    expect(estimateTokens('你好你好')).toBe(3); // ceil(4 × 0.7)
   });
 
   it('拉丁字符按 4 字符 1 token 计', () => {
@@ -36,7 +41,7 @@ describe('estimateTokens（全应用唯一的字符↔token 换算）', () => {
   });
 
   it('中英混排各算各的', () => {
-    expect(estimateTokens('你好abcd')).toBe(5); // ceil(3.4 + 1)
+    expect(estimateTokens('你好abcd')).toBe(3); // ceil(2×0.7 + 4×0.25)
   });
 
   it('中文标点与全角字符算作汉字', () => {

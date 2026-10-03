@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { createWorkspaceToolRegistry } from '@app/tools/workspaceToolRegistry';
 import type { ChatStreamEvent } from '@ports/LLMProvider';
 import { DEFAULT_APP_SETTINGS, type AppSettings } from '@domain/value-objects/appSettings';
+import { estimateTokens } from '@domain/value-objects/usage';
 import {
   createFakeProvider,
   createFakeWorkspace,
@@ -9,6 +11,7 @@ import {
   kinds,
   runConversation,
   textOf,
+  withoutToolSpecs,
 } from '../helpers/chatHarness';
 
 /** 让新会话默认落在「中」档、且字数下限调小到测试里几轮就能达到 */
@@ -273,7 +276,9 @@ describe('续写引擎', () => {
   });
 
   it('开了自动压缩：续写走到触发线就**自己压一次再接着写**，不必停下等用户', async () => {
-    const chunk = (label: string) => `${label}内容`.repeat(60); // ≈600 字 ≈ 520 token
+    const chunk = (label: string) => `${label}内容`.repeat(60); // ≈300 字 ≈ 210 token
+    /** 一轮续写大约多少 token —— 下面的预算按它现算（估算系数校准过，别再写死数字） */
+    const CHUNK_TOKENS = estimateTokens(chunk('第一段'));
     const waitIdle = async (service: { snapshot: () => { streamingMessageId: unknown } }) => {
       for (let waited = 0; waited < 600; waited += 1) {
         if (service.snapshot().streamingMessageId === null) return;
@@ -282,22 +287,25 @@ describe('续写引擎', () => {
     };
 
     /**
-     * 预算 4000、触发线 80% = 3200。
+     * 预算 = 8 份一轮的量，触发线 80%。
      *
      * 刻意这样摆（每一步都是为了**让压缩只能发生在生成过程中**）：
      *  - 这里没有系统提示词要算：`config.systemPrompt` 只来自「会话 → 角色」两层，
      *    两者都没设时是空串（全局那份不走这个口径），所以数只落在"历史 + 已写正文"上；
-     *  - 历史两轮 ≈2080 token，加本次提问 ≈2600 —— **低于触发线**，
+     *  - 历史两轮（= 4 份）+ 本次提问（1 份）≈ 5 份 —— **低于触发线（6.4 份）**，
      *    所以发送前那道闸门不会压（否则就分不清是"发送前压的"还是"轮间压的"了）；
      *  - `keepRecentMessages: 1`：只留最近一轮原文，更早的两轮才是可压的；
-     *  - 每轮续写 ≈520 token，第 1 轮之后就越过 3200 → 轮间压缩。
+     *  - 每轮续写又是 1 份，一两轮之后就越过触发线 → 轮间压缩。
+     *
+     * 这些倍数按**当前估算函数**现算，不写死 token 数：早先写死 4000，
+     * 是按旧系数（汉字 ×1.7）配的，校准之后同样的正文只算三分之一，触发线就够不着了。
      */
     const settingsFor = (compression: 'auto' | 'off'): AppSettings => {
       const settings = continuationSettings(100_000);
-      // 预算 = 4000 − 500（单轮输出上限，见 continuationSettings）
+      // 预算 = 8 份 − 500（单轮输出上限，见 continuationSettings）
       settings.context = {
         ...settings.context,
-        maxContextTokens: 4000,
+        maxContextTokens: CHUNK_TOKENS * 8 + 500,
         keepRecentMessages: 1,
         compression,
         compressAt: 0.8,
@@ -305,8 +313,16 @@ describe('续写引擎', () => {
       return settings;
     };
 
+    /*
+     * 用**不发工具声明**的工具集（系统提示词里那段说明保留）
+     *
+     * 这里的预算只留了"内容"的份额（`CHUNK_TOKENS * 8`），而工具声明那份 JSON 是
+     * 每个请求固定多出的一份开销（实测 3 个工具 ≈ 353 token）——它一进来，
+     * "到线就压"的窗口就被顶到硬上限之外，用例从"压一次"变成"被拦下"。
+     */
     const run = (compression: 'auto' | 'off') =>
       runConversation({
+        tools: withoutToolSpecs(createWorkspaceToolRegistry(createFakeWorkspace().api)),
         settings: settingsFor(compression),
         // 前两轮回答"垫历史"的两条，其余留给续写
         rounds: [
@@ -347,18 +363,24 @@ describe('续写引擎', () => {
 
   it('上下文到顶（且没开自动压缩）：主动收在上一轮，而不是让上游拒一次', async () => {
     const settings = continuationSettings(100_000);
+    const chunk = (label: string) => `${label}内容`.repeat(60);
     /*
-     * 预算 2000（2500 − 500）、每轮约 600 字 ≈ 520 token —— 第 4 轮左右就会顶到上限。
+     * 预算 = 4 轮续写的量（上限减去 500 的输出预留）。
+     *
+     * 【为什么按估算函数现算】这里早先写死 2500，是按旧系数（汉字 ×1.7）配的：
+     * 那句注释说"第 4 轮左右顶到上限"。估算一校准，同样的正文只算三分之一，
+     * 于是变成第 10 轮才停 —— 这条用例就成了另一回事（下面 `requests.length <= 6` 直接红）。
      * 轮数脚本给足（20 轮），这样"停"只可能是**主动停**，不是脚本用完导致的。
      */
     settings.context = {
       ...settings.context,
-      maxContextTokens: 2500,
+      maxContextTokens: estimateTokens(chunk('第一段')) * 4 + 500,
       compression: 'off',
     };
-    const chunk = (label: string) => `${label}内容`.repeat(60);
 
     const { requests, node } = await runConversation({
+      // 同上：预算照内容现算，别让工具声明那份固定开销顶掉它
+      tools: withoutToolSpecs(createWorkspaceToolRegistry(createFakeWorkspace().api)),
       settings,
       rounds: Array.from({ length: 20 }, (_, index) => chunkRound(chunk(`第${index + 1}段`))),
     });

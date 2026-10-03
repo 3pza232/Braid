@@ -199,14 +199,37 @@ npm run build    # verify + 构建
 否则前面几轮花掉的量会被一次覆盖吃掉、显示偏小。用例：
 `tests/application/continuationEngine.test.ts` 里那条"用量是整条消息的总和"。
 
+**请求里 `tools` 那份 JSON 也要算进上下文**：打开工作区后工具信息发**两份** ——
+系统提示词里那段文字说明（`promptSection()`）与 `tools` 字段的 schema
+（实测 3 个工具 ≈ 353 token）。按 OpenAI 兼容协议后者同样计入 `prompt_tokens`，
+早先整份漏算：长对话里只差零点几个百分点，短对话上却能偏低七成，而且方向是危险的那侧
+（以为还有余量 → 请求撞上游上限）。它就是 `ContextUsageInput.toolSpecTokens`，
+值由 `ChatService.toolSpecTokens()` 提供。**别把它并进 `systemPrompt` 去算** ——
+那是两份独立的内容，服务商两份都收。用例：`tests/domain/contextCompression.test.ts`、
+`tests/application/contextBudgetRefresh.test.ts`。
+写用例时若要排除这份开销，用 `withoutToolSpecs()`（只掐声明、保留提示词里那段），
+**不要**用 `createNoToolRegistry()` —— 后者连提示词那份也清了，按内容标定的预算会跟着偏
+（症状是用例从"该压缩"变成"没到触发线"，已经踩过一次）。
+
 **流式期间那个数字是估算的**（界面显示 `≈`）：准确值随最后一个 chunk 才到，所以每 120ms 的 flush
 会写一份"已收工轮次的准确值 + 这一轮的估算"，这一轮结束后换成准确值。估算必须带
 `TokenUsage.estimated` —— 与缓存命中率同一套纪律：**估算不能冒充服务端数据**。
-用例：`tests/application/streamPhase.test.ts`。
+**同一条纪律也管"服务端什么都没给"那一档**（`resolveUsage`：被中止的请求、或端点没实现
+`include_usage`）：那时整份数字都是本地估的，必须标 `estimated`，否则界面不加 `≈`，
+用户看到的是一串"看起来精确"的数。用例：`tests/application/streamPhase.test.ts`、
+`tests/application/messageAssembly.test.ts`。
 
 **过程面板的自动开合看"当前阶段"，不看"有没有东西在跑"**（`ChatSnapshot.streamPhase`，
 规则在 `ui/utils/panelVisibility.ts`）。改坏它的两个典型症状：续写的第二轮又开始思考却不展开、
 工具框一闪而过（因为写文件只要几十毫秒）。详见 [08-ui.md](./08-ui.md)。
+
+**汉字那套换算系数是量出来的，不是拍的**（`CHAR_TO_TOKEN_RATIO`：汉字 0.7 / 拉丁 0.25）。
+别按"感觉更安全"把它调回 1.5~1.7 —— 那个数字属于**旧一代 tokenizer**，实测平均高估 **89%**，
+而且它一个系数喂着**三处**（上下文预算、压缩触发线、界面上的"约 N token"），
+调大它等于让程序"动不动就压缩、白丢历史"。实测数据与标尺见
+[02-domain.md](./02-domain.md) 的「用量与 token 估算」与 `tests/domain/tokenEstimateCalibration.test.ts`。
+另外，凡是按 token 数摆位的用例（压缩阈值、预算窗口）都要**从 `estimateTokens` 现算**，
+而不是写死数字 —— 否则校准一次就要重调一批（这次就重调了 11 处）。
 
 ## 打包 exe：两个环境坑（都踩过）
 

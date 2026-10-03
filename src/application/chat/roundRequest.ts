@@ -2,6 +2,7 @@ import type { MessageSegment } from '@domain/entities/message';
 import { describeContextActions, planContext } from '@domain/rules/contextPlan';
 import { appendSegmentsToTranscript } from '@domain/rules/toolTranscript';
 import type { SamplingParams } from '@domain/value-objects/sampling';
+import { toolSpecTokensOf } from '@app/chat/messageAssembly';
 import type { ChatRequest, ProviderMessage, ProviderTool } from '@ports/LLMProvider';
 
 /**
@@ -90,7 +91,19 @@ export function buildRoundRequest(input: RoundRequestInput): RoundPlan {
     messages.push({ role: 'user', content: input.continuationPrompt });
   }
 
-  const planned = planContext({ messages, budget: input.contextBudget });
+  /*
+   * 裁剪目标要**先扣掉 `tools` 那份固定开销**
+   *
+   * `messages` 里已经含系统提示词（它是第一条 system 消息，所以一直算着），但不含
+   * `tools` 字段的 JSON —— 那份同样计入 `prompt_tokens`。不扣掉它，`planContext`
+   * 会以为自己还装得下，真发出去的请求却超出预算：本该"裁一下就能发"的情形，
+   * 会变成闸门直接拦住（用户看到的是"上下文超限"，而它其实还能救）。
+   *
+   * 扣完不足 1 token 时按"没有预算"处理（`planContext` 的既有语义）—— 那种预算
+   * 本来就装不下任何一条消息，闸门会拦下并说清下一步。
+   */
+  const budget = Math.max(0, input.contextBudget - toolSpecTokensOf(input.tools));
+  const planned = planContext({ messages, budget });
 
   return {
     request: {

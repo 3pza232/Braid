@@ -45,6 +45,7 @@ import {
   createNode,
   resolveUsage,
   serializePrompt,
+  toolSpecTokensOf,
 } from '@app/chat/messageAssembly';
 import { createContextManager, type ContextManager } from '@app/chat/contextManager';
 import type { ToolRegistry } from '@app/tools/workspaceToolRegistry';
@@ -229,6 +230,8 @@ export class ChatService implements ChatApi {
       activeTree: () => this.getActiveTree(),
       streamingId: () => this.streamingId,
       isCompressing: () => this.compressing,
+      // 工具声明那份 JSON 也算进上下文（系统提示词里那份说明是另一份，见 toolSpecTokens）
+      toolSpecTokens: () => this.toolSpecTokens(),
       setCompressing: (value) => {
         this.compressing = value;
       },
@@ -1170,9 +1173,36 @@ export class ChatService implements ChatApi {
     promptText: string,
     liveText: string,
   ): TokenUsage {
-    const round = estimateUsage(this.promptTokensOf(promptText), liveText);
+    // 提示词那一半要连工具声明的 JSON 一起算（它不在 promptText 里，但每次都要发）
+    const round = estimateUsage(this.promptTokensOf(promptText) + this.toolSpecTokens(), liveText);
     return addUsage(settledUsage, round) ?? round;
   }
+
+  /**
+   * 工具声明的 JSON 占多少 token（请求的 `tools` 字段）
+   *
+   * 【为什么单独算】打开工作区后工具信息会发**两份**：
+   *  1. 系统提示词里那段文字说明 —— 已经在 `systemPrompt` 里算过了；
+   *  2. `tools` 字段的 JSON（名字、描述、参数 schema）—— 就是这一份。
+   * 按 OpenAI 兼容协议后者同样计入 `prompt_tokens`，早先整份漏算：长对话里
+   * 只占零点几个百分点，短对话上却能差七成（详见 `ContextUsageInput.toolSpecTokens`）。
+   *
+   * 按 JSON 内容记忆：`status()` 每次快照都要现算（顶栏那个数字必须等于"下一次
+   * 请求会占用多少"），而工作区没变时这份串是稳定的 —— 不记忆就等于每次刷新都
+   * 把那串 JSON 重新逐字扫一遍。
+   */
+  private toolSpecTokens(): number {
+    const specs = this.tools.specs();
+    const json = JSON.stringify(specs);
+    if (this.toolSpecCache?.json === json) return this.toolSpecCache.tokens;
+    // 口径只有一处：`toolSpecTokensOf`（`roundRequest` 算裁剪目标时也用同一份）
+    const tokens = toolSpecTokensOf(specs);
+    this.toolSpecCache = { json, tokens };
+    return tokens;
+  }
+
+  /** `toolSpecTokens` 的记忆（见它的说明） */
+  private toolSpecCache: { json: string; tokens: number } | null = null;
 
   /**
    * 这一轮提示词的估算 token 数（按**内容**记忆，变了才重算）
@@ -1284,7 +1314,18 @@ export class ChatService implements ChatApi {
       aborted: input.aborted,
     });
 
-    const usage = resolveUsage(input.usage, input.previousPrompt, input.promptText, input.text);
+    /*
+     * 最后一个参数是"不在 promptText 里、但服务商照样要算"的固定开销（工具声明的 JSON）。
+     * 只在"服务端什么都没给、全靠本地估算"（被中止、或端点没实现 include_usage）那条
+     * 路径上生效 —— 服务端给了用量时它的 prompt_tokens 本来就含这一份，不能再加。
+     */
+    const usage = resolveUsage(
+      input.usage,
+      input.previousPrompt,
+      input.promptText,
+      input.text,
+      this.toolSpecTokens(),
+    );
 
     const streamed = withStreamedContent(existing, body, input.reasoning, Date.now(), input.settled);
     const next: MessageNode = {

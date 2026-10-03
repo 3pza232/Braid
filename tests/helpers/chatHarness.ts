@@ -1,5 +1,8 @@
 import { ChatService } from '@app/chat/ChatService';
-import { createWorkspaceToolRegistry } from '@app/tools/workspaceToolRegistry';
+import {
+  createWorkspaceToolRegistry,
+  type ToolRegistry,
+} from '@app/tools/workspaceToolRegistry';
 import type { Conversation } from '@domain/entities/conversation';
 import type { MessageNode, MessageSegment } from '@domain/entities/message';
 import { DEFAULT_APP_SETTINGS, type AppSettings } from '@domain/value-objects/appSettings';
@@ -147,6 +150,48 @@ export function createFakeWorkspace(): FakeWorkspace {
   return state;
 }
 
+/* ────────────────────────── 假工具集 ────────────────────────── */
+
+/**
+ * 一个**不发任何工具声明**的工具集
+ *
+ * 【什么时候该用它】那些"需要一整个 ChatService、但并不关心工具"的用例。
+ * 打开工作区之后，每个请求都会固定多带一份工具声明的 JSON（实测 3 个工具
+ * ≈ 353 token），它会**悄悄挪动所有与上下文用量有关的数字** —— 于是"刚好卡在
+ * 触发线上"这类用例开始在自己无关的地方变红，改一条工具描述也要跟着改预算。
+ * 那说明这个耦合本身是错的：量压缩算术的用例，不该被工具声明的篇幅牵着走。
+ *
+ * **想量工具那份开销的用例请用真的 `createWorkspaceToolRegistry`** ——
+ * 接线由 `contextBudgetRefresh.test.ts`（两个服务相减）与域层的
+ * `contextCompression.test.ts`（公式）分别钉住。
+ *
+ * `run` 故意直接抛：用它的用例都不触发工具轮，真调到了说明接线错了，要立刻知道。
+ */
+export function createNoToolRegistry(): ToolRegistry {
+  return {
+    specs: () => [],
+    promptSection: () => '',
+    run: async () => {
+      throw new Error('这个用例不该触发工具调用（它用的是 createNoToolRegistry）');
+    },
+  } as unknown as ToolRegistry;
+}
+
+/**
+ * 同一套工具，但**不发 `tools` 声明**（`promptSection` 原样保留）
+ *
+ * 【和 `createNoToolRegistry()` 的区别，别用错】那个是"这个会话压根没有工具"，
+ * 连系统提示词里那段能力说明一起没有；这个只是"不发那份 JSON 声明"，提示词照旧。
+ *
+ * 【什么时候要这个】用例的预算按**内容**标定、而系统提示词里那段说明本来就在算的时候。
+ * 直接换 `createNoToolRegistry()` 会把那段说明也拿掉，预算的标定跟着偏 —— 症状是
+ * 用例从"该压缩"变成"没到触发线"，红得莫名其妙（真踩到）。只掐声明则标定原样成立，
+ * 而且改一条工具描述也不会连累这些用例。
+ */
+export function withoutToolSpecs(registry: ToolRegistry): ToolRegistry {
+  return { ...registry, specs: () => [] };
+}
+
 /* ────────────────────────── 假模型 ────────────────────────── */
 
 export interface RecordedRequest {
@@ -215,6 +260,14 @@ export async function runConversation(options: {
   rounds: ChatStreamEvent[][];
   /** 浏览器授予写入权限了吗（唯一会让"写文件"失败的开关） */
   writeGranted?: boolean;
+  /**
+   * 用哪套工具集（默认真工具 —— 端到端别偷偷简化掉现实）
+   *
+   * 【什么时候要显式传 `createNoToolRegistry()`】用例按**内容**现算预算的时候。
+   * 工具声明那份 JSON 是每个请求固定多出的一份开销（实测 3 个工具 ≈ 353 token），
+   * 它会把"刚好卡在触发线上"这类数字整体顶过去，红在与自己无关的地方。
+   */
+  tools?: ToolRegistry;
   prompt?: string;
   /**
    * 发送之前的挂钩，拿到的是**已经装配好、还没开始跑**的服务
@@ -227,7 +280,7 @@ export async function runConversation(options: {
   const { store, messages } = createStores();
   const workspace = createFakeWorkspace();
   workspace.writeGranted = options.writeGranted ?? true;
-  const tools = createWorkspaceToolRegistry(workspace.api);
+  const tools = options.tools ?? createWorkspaceToolRegistry(workspace.api);
   // 需要压制上下文压缩的用例请改用 tests/application/contextCompression.test.ts 里的装配
   const { provider, requests, compressions } = createFakeProvider(options.rounds);
 

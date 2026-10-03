@@ -519,7 +519,11 @@ export function RolesPanel() {
                       format={(v) => v.toFixed(2)}
                     />
                   </SettingRow>
-                  <SettingRow label="单次最大输出" help={SAMPLING_CONSTRAINTS.maxTokens.hint}>
+                  {/* 标签取自同一处定义（sampling.ts），别在这里写死 —— 改名漏过一次 */}
+                  <SettingRow
+                    label={SAMPLING_CONSTRAINTS.maxTokens.label}
+                    help={SAMPLING_CONSTRAINTS.maxTokens.hint}
+                  >
                     <NumberField
                       value={editing.params.maxTokens ?? settings.sampling.maxTokens ?? 8192}
                       min={256}

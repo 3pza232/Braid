@@ -50,6 +50,17 @@ export interface ContextManagerDeps {
   streamingId: () => MessageId | null;
   isCompressing: () => boolean;
   setCompressing: (value: boolean) => void;
+  /**
+   * 请求里 `tools` 字段（工具声明的 JSON）占多少 token
+   *
+   * 【为什么是取值的函数，而不是一个数】工具集随工作区走：选中目录、浏览器授权
+   * 前后，`specs()` 的内容都不一样（没授权时压根不发工具声明）。所以每次估算都要
+   * 现取 —— 存一份字段就会在"用户刚选了目录"之后仍然按旧值算。
+   *
+   * 这是**系统提示词之外的第二份工具信息**，漏算它短对话上能偏低七成，
+   * 详见 `ContextUsageInput.toolSpecTokens`（那边是唯一的口径定义处）。
+   */
+  toolSpecTokens: () => number;
   /** 顶栏那句"最近一次为塞进上下文做过什么" */
   setNote: (note: string | null) => void;
   /** 落库 + 通知界面（服务的 commit：先内存、后磁盘） */
@@ -104,6 +115,7 @@ export function createContextManager(deps: ContextManagerDeps): ContextManager {
       path: activePathOf(cachedTreeIndex(tree.nodes), tree.activeRootChildId),
       summaryTokens: summary?.tokens ?? 0,
       systemPrompt: config.systemPrompt,
+      toolSpecTokens: deps.toolSpecTokens(),
     });
     const budget = config.contextBudget;
 
@@ -164,6 +176,7 @@ export function createContextManager(deps: ContextManagerDeps): ContextManager {
         path: activePathOf(cachedTreeIndex(tree.nodes), tree.activeRootChildId),
         summaryTokens: activeSummaryOf(conversation)?.tokens ?? 0,
         systemPrompt: config.systemPrompt,
+        toolSpecTokens: deps.toolSpecTokens(),
         incoming,
       });
     };

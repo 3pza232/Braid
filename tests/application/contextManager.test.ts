@@ -55,6 +55,8 @@ interface Setup {
   compressing?: boolean;
   summaryText?: string;
   completeFails?: boolean;
+  /** 请求里 `tools` 字段那份 JSON 占的 token（默认 0 = 没开工作区） */
+  toolSpecTokens?: number;
 }
 
 function setup(options: Setup = {}) {
@@ -102,6 +104,7 @@ function setup(options: Setup = {}) {
     streamingId: () => (options.streaming === true ? asMessageId('m-streaming') : null),
     isCompressing: () => compressingLog.at(-1) === true || options.compressing === true,
     setCompressing: (value) => compressingLog.push(value),
+    toolSpecTokens: () => options.toolSpecTokens ?? 0,
     setNote: (value) => {
       note = value;
     },
@@ -146,6 +149,32 @@ describe('用量状态', () => {
 
     expect(status.usedTokens).toBeGreaterThanOrEqual(status.budget);
     expect(status.blocked).toBe(true);
+  });
+
+  /*
+   * 工具声明那份 JSON 要算进来（请求的 `tools` 字段）
+   *
+   * 【这是系统提示词之外的**第二份**工具信息】打开工作区后，工具会以两种形式各发一份：
+   * 提示词里一段文字说明（在 `systemPrompt` 里，一直是有算的）与 `tools` 字段的 JSON
+   * （名字/描述/参数 schema，这份早先整份漏算，实测 3 个工具 ≈ 353 token）。
+   */
+  it('把请求里 tools 那份 JSON 也算进去', () => {
+    const without = setup({ budget: 100_000 }).manager.status();
+    const withTools = setup({ budget: 100_000, toolSpecTokens: 350 }).manager.status();
+
+    expect(withTools.usedTokens - without.usedTokens).toBe(350);
+  });
+
+  it('漏算它的后果：明明已经贴边，却显示成"还有余量"（于是请求直接撞上游上限）', () => {
+    const base = setup({ budget: 100_000 }).manager.status().usedTokens;
+    // 预算只留 200 的余量，而工具那份 JSON 要占 350
+    const budget = base + 200;
+    const without = setup({ budget }).manager.status();
+    const withTools = setup({ budget, toolSpecTokens: 350 }).manager.status();
+
+    // 不算工具 → 看起来发得出去；算了工具 → 已经超了，该被闸门拦住
+    expect(without.blocked).toBe(false);
+    expect(withTools.blocked).toBe(true);
   });
 });
 

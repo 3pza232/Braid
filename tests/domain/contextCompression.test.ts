@@ -7,7 +7,7 @@ import {
   planCompression,
   summaryMessage,
 } from '@domain/rules/contextCompression';
-import { estimateTokens } from '@domain/value-objects/usage';
+import { CHAR_TO_TOKEN_RATIO, estimateTokens } from '@domain/value-objects/usage';
 import { asId, node } from '../helpers/messageNode';
 
 /**
@@ -19,8 +19,16 @@ import { asId, node } from '../helpers/messageNode';
  *  - 把系统提示词也压了 → 人设与规则松动，模型开始不听话。
  */
 
-/** 一段够长的正文（约 850 token），确保超过"值得压缩"的门槛 */
-const longText = (label: string) => `${label}：${'甲'.repeat(500)}`;
+/**
+ * 一段够长的正文：确保超过"值得压缩"的门槛（域规则里的 `MIN_COVERED_TOKENS = 800`）
+ *
+ * 【长度为什么按估算系数现算】门槛量的是 token，而 token 是估算出来的。早先这里写死
+ * 500 个汉字 —— 旧系数（×1.7）下约 850，刚好过线；估算一校准就掉到 350 左右，
+ * "够长"变得不够长，`planCompression` 直接返回 `null`，一连串用例集体红。
+ * 现在按当前系数换算，并留 1.5 倍余量。
+ */
+const LONG_BODY_CHARS = Math.ceil((800 * 1.5) / CHAR_TO_TOKEN_RATIO.cjk);
+const longText = (label: string) => `${label}：${'甲'.repeat(LONG_BODY_CHARS)}`;
 
 const turn = (index: number) => [
   node(`u${index}`, { role: 'user', segments: [{ kind: 'text', text: longText(`问题${index}`) }] }),
@@ -62,6 +70,40 @@ describe('estimateContextUsage', () => {
 
     expect(withoutPrompt).toBe(0);
     expect(withPrompt).toBe(estimateTokens('甲'.repeat(1000)));
+  });
+
+  /*
+   * 请求里 `tools` 那份 JSON 也要算 —— 它是**系统提示词之外的第二份**工具信息。
+   *
+   * 打开工作区后，工具声明发了两次：提示词里一段文字说明（上面那条覆盖的是它），
+   * 以及 `tools` 字段的 JSON（名字 / 描述 / 参数 schema）。后者按 OpenAI 兼容协议
+   * 同样计入 `prompt_tokens`，而这里早先整份漏算 —— 实测 3 个工具约 353 token。
+   *
+   * 它在长对话里只占零点几个百分点，短对话上却能偏低七成，且方向是危险的那侧
+   * （以为还有余量 → 请求直接撞上游上限）。**别把它并进 systemPrompt 去算**：
+   * 那两句话是两份独立的内容，服务商两份都收。
+   */
+  it('请求里 tools 那份 JSON 也要算，而且不与系统提示词混为一谈', () => {
+    const without = estimateContextUsage({ path: [], summaryTokens: 0, systemPrompt: '' });
+    const withTools = estimateContextUsage({
+      path: [],
+      summaryTokens: 0,
+      systemPrompt: '',
+      toolSpecTokens: 353,
+    });
+    const both = estimateContextUsage({
+      path: [],
+      summaryTokens: 0,
+      // 提示词里那份文字说明（一直有算）
+      systemPrompt: '甲'.repeat(100),
+      // tools 字段那份 schema（这次补上的）
+      toolSpecTokens: 353,
+    });
+
+    expect(without).toBe(0);
+    expect(withTools).toBe(353);
+    // 两份是相加关系，不是"算一份就够"
+    expect(both).toBe(estimateTokens('甲'.repeat(100)) + 353);
   });
 });
 

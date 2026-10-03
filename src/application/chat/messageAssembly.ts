@@ -8,7 +8,7 @@ import type { SamplingParams } from '@domain/value-objects/sampling';
 import type { TokenUsage } from '@domain/value-objects/usage';
 import { estimateCacheStats, estimateTokens } from '@domain/value-objects/usage';
 import type { ConversationId } from '@shared/ids';
-import type { ProviderMessage } from '@ports/LLMProvider';
+import type { ProviderMessage, ProviderTool } from '@ports/LLMProvider';
 import { asMessageId, type MessageId } from '@shared/ids';
 import type { AppError } from '@shared/result';
 
@@ -147,6 +147,26 @@ export function serializePrompt(messages: ProviderMessage[]): string {
   return messages.map((message) => `${message.role}\u0000${message.content}`).join('\u0001');
 }
 
+/**
+ * 请求里 `tools` 那份 JSON 占多少 token
+ *
+ * 【它为什么不是"提示词的一部分"】打开工作区后工具信息发**两份**：系统提示词里那段
+ * 文字说明（就在 `messages` 里，本来就算着）与 `tools` 字段的 schema。按 OpenAI 兼容
+ * 协议两者都计入 `prompt_tokens`，所以这一份要单独加 —— 口径写在
+ * `ContextUsageInput.toolSpecTokens`（那里说了为什么漏算它会让短对话偏低七成）。
+ *
+ * 【为什么只在这里实现】需要它的地方有两处，而它们的性质完全不同：
+ *  1. `ChatService` —— 估算"这次请求会占用多少"（顶栏进度条、压缩触发线、发送闸门）；
+ *  2. `roundRequest` —— 给 `planContext` 的**裁剪目标**（裁掉过长的工具输出）。
+ * 各写一遍的话，迟早是一边 353、一边 0，而且这种差很难被看出来。
+ *
+ * 没有声明时返回 **0**（而不是 `JSON.stringify([])` 的 1 token）：没发工具就该是零开销。
+ */
+export function toolSpecTokensOf(tools: readonly ProviderTool[]): number {
+  if (tools.length === 0) return 0;
+  return estimateTokens(JSON.stringify(tools));
+}
+
 /** 失败原因追加进正文（Schema 没有错误字段，这是唯一能保住原因的位置） */
 export function appendFailure(text: string, error: AppError): string {
   const marker = `${FAILURE_MARK} ${error.message}`;
@@ -167,6 +187,15 @@ export function resolveUsage(
   previousPrompt: string,
   promptText: string,
   text: string,
+  /**
+   * 提示词里那些**不在 `promptText` 里、服务商照样要算**的固定开销
+   *
+   * 现在只有工具声明的 JSON（请求的 `tools` 字段，见
+   * `ContextUsageInput.toolSpecTokens`）。**只在"服务端什么都没给、全靠本地估算"
+   * 那一条路径上用** —— 服务端给了用量时，它的 `prompt_tokens` 本来就含这一份，
+   * 再加一次就是重复计算。
+   */
+  fixedTokens = 0,
 ): TokenUsage | undefined {
   const estimate = estimateCacheStats(previousPrompt, promptText);
 
@@ -180,12 +209,21 @@ export function resolveUsage(
   }
 
   const completionTokens = estimateTokens(text);
-  const promptTokens = estimate.hitTokens + estimate.missTokens;
+  const promptTokens = estimate.hitTokens + estimate.missTokens + fixedTokens;
   return {
     promptTokens,
     completionTokens,
     totalTokens: promptTokens + completionTokens,
     cachedPromptTokens: estimate.hitTokens,
+    /*
+     * 整份都是估算 → 必须打上 `estimated`
+     *
+     * 少了这一笔，界面就不会加 `≈`（`MessageItem` 只认这一个字段），用户看到的
+     * 是一串"看起来精确"的数字 —— 而防住这件事正是本模块开头那句
+     * "估算绝不能冒充服务端数据"。走这条路的是：被中止的请求、
+     * 或端点没实现 `include_usage`（那时服务端确实什么都没给）。
+     */
+    estimated: true,
     cacheSource: 'estimated',
   };
 }

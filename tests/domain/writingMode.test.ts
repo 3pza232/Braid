@@ -39,9 +39,9 @@ describe('estimatedRounds（"约需 20 轮"这种提示的来源）', () => {
   });
 
   it('按每轮实际能产出的字数换算并向上取整', () => {
-    // 8192 token ÷ 1.7 ≈ 4,819 汉字/轮
-    expect(estimatedRounds(preset({ minOutputChars: 20_000 }), TOKENS_8K)).toBe(5); // ceil(4.15)
-    expect(estimatedRounds(preset({ minOutputChars: 96_000 }), TOKENS_8K)).toBe(20);
+    // 8192 token ÷ 0.7 ≈ 11,703 汉字/轮（汉字系数见 usage.ts 里那张实测表）
+    expect(estimatedRounds(preset({ minOutputChars: 20_000 }), TOKENS_8K)).toBe(2); // ceil(1.71)
+    expect(estimatedRounds(preset({ minOutputChars: 96_000 }), TOKENS_8K)).toBe(9); // ceil(8.20)
   });
 
   it('下限极小也至少报 1 轮（0 轮没有意义）', () => {
@@ -57,11 +57,10 @@ describe('estimatedRounds（"约需 20 轮"这种提示的来源）', () => {
    * 而这个数字是他判断"要花多久、多少钱"的依据。
    */
   it('按传入的单轮输出上限换算：上限越大，需要的轮数越少', () => {
-    expect(charsPerRoundOf(TOKENS_8K)).toBe(4819);
+    expect(charsPerRoundOf(TOKENS_8K)).toBe(11_703); // 8192 ÷ 0.7
 
     const target = preset({ minOutputChars: 10_000 });
-    expect(estimatedRounds(target, TOKENS_8K)).toBe(3); // ceil(10000 / 4819)
-    // 上限大得多 → 一轮就够，而不是仍然报 3 轮
+    expect(estimatedRounds(target, TOKENS_8K)).toBe(1); // 一轮就能写过 1 万字
     expect(estimatedRounds(target, 384_000)).toBe(1);
   });
 });

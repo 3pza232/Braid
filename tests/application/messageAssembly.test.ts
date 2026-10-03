@@ -267,6 +267,27 @@ describe('resolveUsage（三档可信度）', () => {
     expect(resolved?.totalTokens).toBe((resolved?.promptTokens ?? 0) + (resolved?.completionTokens ?? 0));
   });
 
+  /*
+   * 「什么都没给」这条路上，整份数字都是本地估的 → 必须打上 `estimated`
+   *
+   * 界面只认这一个字段（`MessageItem` 靠它决定要不要在数字前加 `≈`）。
+   * 少了它，用户看到的就是一串**看起来精确**的数字 —— 而这条路正是被中止的请求、
+   * 或端点没实现 `include_usage` 时走的，此时根本没有服务端数据可依据。
+   */
+  it('整份都是估算时要标记 `estimated`（否则界面不会显示 `≈`）', () => {
+    const resolved = resolveUsage(undefined, '', '你好世界', 'abcdefgh');
+    expect(resolved?.estimated).toBe(true);
+  });
+
+  it('但只要服务端给了用量就不标 `estimated` —— 那是真实数字', () => {
+    const usage = { promptTokens: 100, completionTokens: 10, totalTokens: 110 };
+    const resolved = resolveUsage(usage, '你好', '你好世界', '回答');
+
+    // 只有"命中数"是估的（`cacheSource` 负责标它），总量本身来自服务端
+    expect(resolved?.cacheSource).toBe('estimated');
+    expect(resolved?.estimated).toBeUndefined();
+  });
+
   it('首次请求（没有上一次的 prompt）估出 0 命中，但不丢字段', () => {
     // 0 与"缺失"是两件事：界面要能显示 0%，而不是不显示
     const resolved = resolveUsage(undefined, '', '你好', '');

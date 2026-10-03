@@ -127,6 +127,21 @@ export interface ContextUsageInput {
   summaryTokens: number;
   /** 系统提示词（续写时它后面还会接工具说明） */
   systemPrompt: string;
+  /**
+   * 请求里 `tools` 字段（工具声明的 JSON）占的 token
+   *
+   * 【这是**第二份**工具信息，不能因为"系统提示词里已经写过工具"就不算】
+   * 打开工作区后，工具信息会以两种形式各发一份：
+   *  1. 系统提示词里的一段文字说明（【工作区与文件工具】……）；
+   *  2. 请求的 `tools` 字段 —— 每个工具的名字、描述、参数 schema 的 JSON。
+   * 而按 OpenAI 兼容协议，`tools` 与 messages 一样计入 `prompt_tokens`。
+   *
+   * 早先这里只算了第 1 份，第 2 份整份漏掉（实测 3 个工具 ≈ 353 token）。
+   * 长对话里它只占零点几个百分点，但**短对话里非常显眼**：3 条消息合计约
+   * 500 token 时，少算 350 就是偏低 70% —— 方向还正好是危险的那一侧
+   * （以为还有余量 → 上游报上下文超长）。
+   */
+  toolSpecTokens?: number;
   /** 这次即将追加的内容：用户的新消息或续写指令 */
   incoming?: string;
 }
@@ -134,15 +149,24 @@ export interface ContextUsageInput {
 /**
  * 估算"下一次请求会占用多少上下文"
  *
- * 三条口径，每一条都对应过一个真实的显示错误：
+ * 四条口径，每一条都对应过一个真实的显示错误：
  *  1. **只算激活路径** —— 别的分支不会被发出去（上一版数的是整棵树，
  *     于是出现"显示 154%、其实那些内容一次都没发出去"的怪象）；
  *  2. **已被纪要覆盖的节点不算** —— 它们真的不再发送了，只算纪要本身；
  *  3. **系统提示词要算上** —— 人设与工具说明动辄几千 token，漏掉它
- *     会让触发线形同虚设（以为还有一半空间，其实已经贴边）。
+ *     会让触发线形同虚设（以为还有一半空间，其实已经贴边）；
+ *  4. **工具声明的 JSON 也要算** —— 它是系统提示词之外的第二份工具信息
+ *     （见 `toolSpecTokens` 的说明，漏掉时短对话上能差七成）。
+ *
+ * 前三条是"别多算"，第 4 条是"别少算"：方向不同的错，代价也不同 ——
+ * 多算会让用户白白提前压缩，少算会把请求直接送到上游撞上限。
  */
 export function estimateContextUsage(input: ContextUsageInput): number {
-  let tokens = estimateTokens(input.systemPrompt) + estimateTokens(input.incoming ?? '') + input.summaryTokens;
+  let tokens =
+    estimateTokens(input.systemPrompt) +
+    (input.toolSpecTokens ?? 0) +
+    estimateTokens(input.incoming ?? '') +
+    input.summaryTokens;
   for (const node of input.path) {
     if (node.contextFlags?.summarized === true) continue;
     tokens += nodeTokens(node);

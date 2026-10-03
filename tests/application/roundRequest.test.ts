@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { buildRoundRequest, type RoundRequestInput } from '@app/chat/roundRequest';
+import { toolSpecTokensOf } from '@app/chat/messageAssembly';
 import type { MessageSegment } from '@domain/entities/message';
 import type { SamplingParams } from '@domain/value-objects/sampling';
+import { estimateTokens } from '@domain/value-objects/usage';
 import type { ProviderMessage, ProviderTool } from '@ports/LLMProvider';
 
 /**
@@ -153,5 +155,34 @@ describe('buildRoundRequest', () => {
     // 首尾都留着：压成"头 + 尾"而不是一刀切，模型才拿得到线索
     expect(sent?.content.startsWith(huge.slice(0, 20))).toBe(true);
     expect(sent?.content).toContain('需要更细的内容请重新调用该工具');
+  });
+
+  /*
+   * 裁剪目标里要**扣掉 `tools` 那份 JSON**
+   *
+   * `messages` 里已经含系统提示词（第一条 system 消息，一直算着），但不含 `tools`
+   * 字段的 JSON —— 那份按 OpenAI 兼容协议同样计入 `prompt_tokens`。不扣掉它，
+   * `planContext` 会以为自己还装得下，真发出去的请求却超出预算。
+   */
+  it('预算里扣掉了 tools 那份 JSON：同一份历史，带了声明就装不下', () => {
+    const history: ProviderMessage[] = [{ role: 'user', content: '甲'.repeat(300) }];
+    const contentTokens = estimateTokens(history[0].content);
+    const specTokens = toolSpecTokensOf([tool]);
+    /*
+     * 预算取"内容装得下、内容 + 声明装不下"的中间值
+     *
+     * 不写死数字：声明的篇幅取决于工具描述，改一句话就不该弄红这条用例。
+     */
+    const budget = contentTokens + Math.floor(specTokens / 2);
+
+    // 没有工具声明：装得下 → 什么都不动（`contextNote` 必须是 null）
+    expect(build({ history, contextBudget: budget }).contextNote).toBeNull();
+
+    /*
+     * 带上声明：总量越过扣完之后的预算 → 如实上报"超了多少"。
+     * 修之前这里算成"装得下"，于是这一轮会带着超预算的请求发出去 ——
+     * 而这正是闸门拦不住、上游才报错的那种情形。
+     */
+    expect(build({ history, tools: [tool], contextBudget: budget }).overBudgetTokens).toBeGreaterThan(0);
   });
 });

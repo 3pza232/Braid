@@ -1,5 +1,6 @@
 import { appError, err, ok, type Result } from '@shared/result';
 import type { ToolCall } from '@domain/entities/message';
+import { SAMPLING_CONSTRAINTS } from '@domain/value-objects/sampling';
 import type { ProviderTool } from '@ports/LLMProvider';
 import type { WorkspaceApi } from '@ports/WorkspaceApi';
 
@@ -37,6 +38,15 @@ export interface ToolRegistry {
  * 后面的对话全部无法进行 —— 而且它往往并不需要全文。
  * 截断时**明确告诉它被截断了**，否则它会基于半截内容下结论。
  */
+/**
+ * 「一次最多写多少」那个设置项的**显示名**，取自同一处定义（`sampling.ts`）
+ *
+ * 下面那段话是**给模型看的**，而模型会照着劝用户去改设置 —— 名字必须和界面上一致，
+ * 否则它指着一个用户找不到的选项。改名前这里写死的是老名字「单次最大输出」，
+ * 改名时漏掉了它（同一类漏改在 `streamOutcome.ts` 也有一处，那边已改成同一个常量）。
+ */
+const MAX_OUTPUT_LABEL = SAMPLING_CONSTRAINTS.maxTokens.label;
+
 const MAX_READ_CHARS = 20_000;
 
 /** 列目录返回给模型的上限 */
@@ -71,7 +81,7 @@ function readString(args: Record<string, unknown>, key: string): string | null {
  *
  * 【为什么不能"解析失败就给个空对象"】
  * 流式拼接出来的 arguments 有可能是不完整的 JSON，最常见的原因是
- * **单次输出上限把参数截断了** —— 写一个较长文件时尤其容易撞上。
+ * **「单轮输出上限」把参数截断了** —— 写一个较长文件时尤其容易撞上。
  *
  * 早先这里退回 `{}` 继续执行，于是 `execute` 里看到 `path` 是 undefined，
  * 报出来的是「缺少参数 path」。那句话把诊断引到了完全错误的方向：
@@ -240,8 +250,8 @@ export function createWorkspaceToolRegistry(workspace: WorkspaceApi): ToolRegist
         return {
           content: [
             `工具 ${call.name} 的参数不是完整的 JSON，这次调用无法执行。`,
-            '最常见的原因是单次输出上限把参数截断了（写入很长的内容时尤其容易）。',
-            '可行的做法：把「单次最大输出」调大；或者把内容分成几次写入',
+            `最常见的原因是「${MAX_OUTPUT_LABEL}」把参数截断了（写入很长的内容时尤其容易）。`,
+            `可行的做法：把「${MAX_OUTPUT_LABEL}」调大；或者把内容分成几次写入`,
             '（第一次建立文件，后续用同一个路径继续补写）。',
             '注意：这不代表路径写法有问题，相对路径本身是支持的。',
           ].join(''),

@@ -398,7 +398,8 @@ export function ConversationSettingsPanel() {
               );
             })}
             <SettingRow
-              label="单次最大输出"
+              /* 标签取自同一处定义（`sampling.ts`），别在这里写死 —— 改名漏过一次 */
+              label={SAMPLING_CONSTRAINTS.maxTokens.label}
               help={SAMPLING_CONSTRAINTS.maxTokens.hint}
               hint={conversation.params.maxTokens === undefined ? '继承中' : '本会话覆盖'}
             >
