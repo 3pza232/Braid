@@ -130,6 +130,8 @@
  * 所以"最宽"是个稳定值，悬停时气泡不会变宽变窄。
  */
 .bubble {
+  /* 侧边底部那个「回到顶端」按钮挂在它身上（.toTop 是绝对定位） */
+  position: relative;
   flex: 0 1 auto;
   min-width: 0;
   max-width: 100%;
@@ -172,10 +174,14 @@
  * 早先是"默认宽度归零、悬停才展开"，结果是鼠标一上去气泡就被挤窄、移开又恢复，
  * 整段文字跟着重排 —— 读长回答时非常难受。
  * 现在固定预留宽度，气泡宽度因此恒定，悬停只切换透明度。
+ *
+ * 【纵排】上面一横排是"对这条消息做什么"，下面单独一行是"跳转到消息底部"。
+ * 宽度仍然固定 116px，所以悬停时气泡照旧不会变宽变窄。
  */
 .actions {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 2px;
   flex: none;
   width: 116px;
@@ -183,15 +189,73 @@
   transition: opacity var(--duration-fast) var(--ease-standard) 0s;
 }
 
+/* 图标仍是一横排（纵排会破坏那一排的间距与对齐） */
+.actionRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
 /* 用户消息的操作条靠右对齐，与镜像布局一致 */
 .message[data-role='user'] .actions {
-  justify-content: flex-end;
+  align-items: flex-end;
 }
 
 .message:hover .actions,
 .message:focus-within .actions,
 .message[data-always='true'] .actions {
   opacity: 1;
+}
+
+/*
+ * 气泡侧边底部的「回到这条顶端」
+ *
+ * 挂在**气泡自己**的角上，而不是操作条里：操作条回答的是"对这条消息做什么"，
+ * 它回答的是"我要看哪儿"。侧边取操作条的对侧（助手靠左、用户靠右），
+ * 两个可点区域就不会挤在同一处。
+ *
+ * 显隐规则与操作条一致（悬停 / 聚焦 / 常显）—— 读长文时不该一直挂着一个小圆点。
+ * 半径 20px，只在悬停时显形，所以不占版面、也不影响行高。
+ */
+.toTop {
+  position: absolute;
+  /*
+   * 默认贴左边：除了下面按角色覆盖的那一种，其余（助手 / 系统 / 工具）都靠左。
+   * 只写 `bottom` 不写左右的话，绝对定位元素会退回它的**静态位置** ——
+   * 也就是掉进正文流里、跟在最后一行字后面。
+   */
+  left: -9px;
+  bottom: -9px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 50%;
+  background: var(--color-bg-raised);
+  color: var(--color-text-tertiary);
+  opacity: 0;
+  transition:
+    opacity var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.message[data-role='user'] .toTop {
+  right: -9px;
+  /* 必须把基类那个 left 清掉，否则左右同时生效、宽度被拉伸 */
+  left: auto;
+}
+
+.message:hover .toTop,
+.message:focus-within .toTop,
+.message[data-always='true'] .toTop {
+  opacity: 1;
+}
+
+.toTop:hover {
+  color: var(--color-accent-default);
+  border-color: var(--color-border-default);
 }
 
 /* ── meta 行 ── */

@@ -1,0 +1,68 @@
+{
+  "id": "nord",
+  "name": "北境",
+  "version": "1.0.0",
+  "colorScheme": "dark",
+  "extends": "braid.dark",
+  "description": "Nord：极地的灰蓝，冷静克制、对比适中",
+  "tokens": {
+    "semantic": {
+      "bg": {
+        "canvas": "#2E3440",
+        "surface": "#3B4252",
+        "raised": "#434C5E",
+        "sunken": "#292E39",
+        "overlay": "rgba(46, 52, 64, 0.78)"
+      },
+      "text": {
+        "primary": "#ECEFF4",
+        "secondary": "#D8DEE9",
+        "tertiary": "#7B88A1",
+        "disabled": "#4C566A",
+        "inverse": "#2E3440",
+        "link": "#88C0D0"
+      },
+      "border": {
+        "subtle": "#3B4252",
+        "default": "#434C5E",
+        "strong": "#4C566A",
+        "focus": "#88C0D0"
+      },
+      "accent": {
+        "default": "#88C0D0",
+        "hover": "#A3D2DC",
+        "active": "#76A9B8",
+        "subtle": "rgba(136, 192, 208, 0.16)",
+        "onAccent": "#2E3440"
+      },
+      "status": {
+        "info": "#81A1C1",
+        "success": "#A3BE8C",
+        "warning": "#EBCB8B",
+        "danger": "#BF616A",
+        "onStatus": "#2E3440"
+      },
+      "role": {
+        "userBubble": "#5E81AC",
+        "userText": "#ECEFF4",
+        "assistantBubble": "#3B4252",
+        "assistantText": "#ECEFF4",
+        "systemBubble": "#4C566A",
+        "systemText": "#EBCB8B",
+        "toolBubble": "#434C5E",
+        "toolText": "#8FBCBB"
+      },
+      "diff": {
+        "add": "rgba(163, 190, 140, 0.16)",
+        "addText": "#A3BE8C",
+        "del": "rgba(191, 97, 106, 0.16)",
+        "delText": "#BF616A",
+        "gutter": "#292E39"
+      },
+      "selection": "rgba(136, 192, 208, 0.22)",
+      "caret": "#88C0D0",
+      "scrollbarThumb": "#4C566A",
+      "scrollbarTrack": "transparent"
+    }
+  }
+}

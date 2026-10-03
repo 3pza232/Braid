@@ -12,7 +12,16 @@ import { cacheStatsOf, formatCacheHitRate, type CacheStats } from '@domain/value
 import { IconButton, Tooltip } from '@ui/primitives';
 import type { MessageId } from '@shared/ids';
 import { Avatar } from './Avatar';
-import { IconChevron, IconClose, IconCopy, IconPencil, IconRefresh, IconTrash } from './Icons';
+import {
+  IconArrowDown,
+  IconArrowUp,
+  IconChevron,
+  IconClose,
+  IconCopy,
+  IconPencil,
+  IconRefresh,
+  IconTrash,
+} from './Icons';
 import type { EditSubmitMode } from '@ports/ChatApi';
 import styles from './MessageItem.module.css';
 
@@ -51,6 +60,14 @@ interface MessageItemProps {
   canContinue?: boolean;
   onSelectVariant: (id: MessageId, delta: number) => void;
   onCopy: (text: string) => void;
+  /**
+   * 跳到这条消息的顶部 / 底部
+   *
+   * 由 `MessageList` 实现，而不是组件自己去找滚动容器：滚动位置、自动跟随、
+   * "这次滚动是我们自己发的"那套记账都在它那儿（见 `pinnedTopRef`），
+   * 散成两处判断迟早会不一致。
+   */
+  onJumpTo: (id: MessageId, edge: 'top' | 'bottom') => void;
 }
 
 /** 结果提示的截断长度：一次目录列表或文件内容可能上万字，塞进悬浮窗根本没法看 */
@@ -122,6 +139,7 @@ function MessageItemView({
   onCopy,
   onContinue,
   canContinue = false,
+  onJumpTo,
 }: MessageItemProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -374,27 +392,40 @@ function MessageItemView({
 
   const actions = !editing ? (
     <div className={styles.actions}>
-      <Tooltip label="复制内容">
-        <IconButton label="复制内容" size={26} onClick={() => onCopy(text)}>
-          <IconCopy size={14} />
-        </IconButton>
-      </Tooltip>
-      <Tooltip label="编辑">
-        <IconButton label="编辑" size={26} onClick={() => setEditing(true)}>
-          <IconPencil size={14} />
-        </IconButton>
-      </Tooltip>
-      {node.role === 'assistant' ? (
-        <Tooltip label="重新生成">
-          <IconButton label="重新生成" size={26} onClick={() => onRegenerate(node.id)}>
-            <IconRefresh size={14} />
+      {/*
+        上面一横排是"对这条消息做什么"，下面那个小箭头是"我要看这条的哪一头"
+
+        跳到底部的按钮**单独占一行**（在原本那几个按钮的换行下方），所以操作条
+        整体改成纵排 —— 图标仍在 .actionRow 里横排，位置与宽度都不变。
+      */}
+      <div className={styles.actionRow}>
+        <Tooltip label="复制内容">
+          <IconButton label="复制内容" size={26} onClick={() => onCopy(text)}>
+            <IconCopy size={14} />
           </IconButton>
         </Tooltip>
-      ) : null}
-      <Tooltip label="删除此条消息">
-        {/* 危险色：这一排里只有它是不可撤销的，必须一眼可辨（见 module.css 的 .danger） */}
-        <IconButton label="删除" size={26} className={styles.danger} onClick={() => onDelete(node.id)}>
-          <IconTrash size={14} />
+        <Tooltip label="编辑">
+          <IconButton label="编辑" size={26} onClick={() => setEditing(true)}>
+            <IconPencil size={14} />
+          </IconButton>
+        </Tooltip>
+        {node.role === 'assistant' ? (
+          <Tooltip label="重新生成">
+            <IconButton label="重新生成" size={26} onClick={() => onRegenerate(node.id)}>
+              <IconRefresh size={14} />
+            </IconButton>
+          </Tooltip>
+        ) : null}
+        <Tooltip label="删除此条消息">
+          {/* 危险色：这一排里只有它是不可撤销的，必须一眼可辨（见 module.css 的 .danger） */}
+          <IconButton label="删除" size={26} className={styles.danger} onClick={() => onDelete(node.id)}>
+            <IconTrash size={14} />
+          </IconButton>
+        </Tooltip>
+      </div>
+      <Tooltip label="跳转到消息底部">
+        <IconButton label="跳转到消息底部" size={22} onClick={() => onJumpTo(node.id, 'bottom')}>
+          <IconArrowDown size={13} />
         </IconButton>
       </Tooltip>
     </div>
@@ -597,6 +628,25 @@ function MessageItemView({
                 ) : (
                   <Markdown text={text} />
                 )}
+                {/*
+                  气泡侧边底部的「回到这条顶端」
+
+                  刻意不放进操作条：那一排回答的是"对这条消息做什么"（复制 / 编辑 / 删除），
+                  而这个是"我要看哪儿" —— 阅读动作，位置也就该长在**气泡自己**身上。
+                  侧边取的是操作条的**对侧**（见 module.css），两者不会挤在一起。
+                */}
+                {!editing ? (
+                  <Tooltip label="跳转到消息顶部">
+                    <button
+                      type="button"
+                      className={styles.toTop}
+                      aria-label="跳转到消息顶部"
+                      onClick={() => onJumpTo(node.id, 'top')}
+                    >
+                      <IconArrowUp size={13} />
+                    </button>
+                  </Tooltip>
+                ) : null}
               </div>
               {isUser ? null : actions}
             </div>

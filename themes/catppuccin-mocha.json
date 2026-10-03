@@ -1,0 +1,68 @@
+{
+  "id": "catppuccin-mocha",
+  "name": "摩卡布丁",
+  "version": "1.0.0",
+  "colorScheme": "dark",
+  "extends": "braid.dark",
+  "description": "Catppuccin Mocha：柔和的紫与奶咖，色彩丰富但都不刺眼",
+  "tokens": {
+    "semantic": {
+      "bg": {
+        "canvas": "#1E1E2E",
+        "surface": "#181825",
+        "raised": "#313244",
+        "sunken": "#11111B",
+        "overlay": "rgba(17, 17, 27, 0.80)"
+      },
+      "text": {
+        "primary": "#CDD6F4",
+        "secondary": "#BAC2DE",
+        "tertiary": "#A6ADC8",
+        "disabled": "#6C7086",
+        "inverse": "#1E1E2E",
+        "link": "#89B4FA"
+      },
+      "border": {
+        "subtle": "#313244",
+        "default": "#45475A",
+        "strong": "#585B70",
+        "focus": "#89B4FA"
+      },
+      "accent": {
+        "default": "#CBA6F7",
+        "hover": "#D9C0FC",
+        "active": "#B18BE8",
+        "subtle": "rgba(203, 166, 247, 0.16)",
+        "onAccent": "#1E1E2E"
+      },
+      "status": {
+        "info": "#89B4FA",
+        "success": "#A6E3A1",
+        "warning": "#F9E2AF",
+        "danger": "#F38BA8",
+        "onStatus": "#1E1E2E"
+      },
+      "role": {
+        "userBubble": "#45475A",
+        "userText": "#CDD6F4",
+        "assistantBubble": "#181825",
+        "assistantText": "#CDD6F4",
+        "systemBubble": "#313244",
+        "systemText": "#F9E2AF",
+        "toolBubble": "#2A2A3C",
+        "toolText": "#89DCEB"
+      },
+      "diff": {
+        "add": "rgba(166, 227, 161, 0.14)",
+        "addText": "#A6E3A1",
+        "del": "rgba(243, 139, 168, 0.14)",
+        "delText": "#F38BA8",
+        "gutter": "#181825"
+      },
+      "selection": "rgba(203, 166, 247, 0.24)",
+      "caret": "#CBA6F7",
+      "scrollbarThumb": "#45475A",
+      "scrollbarTrack": "transparent"
+    }
+  }
+}

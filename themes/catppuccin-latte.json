@@ -1,0 +1,68 @@
+{
+  "id": "catppuccin-latte",
+  "name": "拿铁布丁",
+  "version": "1.0.0",
+  "colorScheme": "light",
+  "extends": "braid.light",
+  "description": "Catppuccin Latte：摩卡布丁的浅色版，白天也够柔",
+  "tokens": {
+    "semantic": {
+      "bg": {
+        "canvas": "#EFF1F5",
+        "surface": "#E6E9EF",
+        "raised": "#FFFFFF",
+        "sunken": "#DCE0E8",
+        "overlay": "rgba(76, 79, 105, 0.32)"
+      },
+      "text": {
+        "primary": "#4C4F69",
+        "secondary": "#5C5F77",
+        "tertiary": "#6C6F85",
+        "disabled": "#9CA0B0",
+        "inverse": "#EFF1F5",
+        "link": "#1E66F5"
+      },
+      "border": {
+        "subtle": "#DCE0E8",
+        "default": "#CCD0DA",
+        "strong": "#BCC0CC",
+        "focus": "#1E66F5"
+      },
+      "accent": {
+        "default": "#8839EF",
+        "hover": "#9A4FF5",
+        "active": "#7526D6",
+        "subtle": "rgba(136, 57, 239, 0.12)",
+        "onAccent": "#FFFFFF"
+      },
+      "status": {
+        "info": "#1E66F5",
+        "success": "#40A02B",
+        "warning": "#DF8E1D",
+        "danger": "#D20F39",
+        "onStatus": "#FFFFFF"
+      },
+      "role": {
+        "userBubble": "#7287FD",
+        "userText": "#FFFFFF",
+        "assistantBubble": "#E6E9EF",
+        "assistantText": "#4C4F69",
+        "systemBubble": "#F5E0DC",
+        "systemText": "#DF8E1D",
+        "toolBubble": "#DCE0E8",
+        "toolText": "#1E66F5"
+      },
+      "diff": {
+        "add": "rgba(64, 160, 43, 0.14)",
+        "addText": "#40A02B",
+        "del": "rgba(210, 15, 57, 0.12)",
+        "delText": "#D20F39",
+        "gutter": "#E6E9EF"
+      },
+      "selection": "rgba(136, 57, 239, 0.16)",
+      "caret": "#8839EF",
+      "scrollbarThumb": "#CCD0DA",
+      "scrollbarTrack": "transparent"
+    }
+  }
+}

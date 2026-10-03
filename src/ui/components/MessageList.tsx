@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { activePathOf, cachedTreeIndex, variantPosition } from '@domain/rules/messageTree';
 import { resolveConfig } from '@domain/rules/resolveConfig';
+import type { MessageId } from '@shared/ids';
 import { IconArrowDown, IconArrowUp } from './Icons';
 import { MessageItem } from './MessageItem';
 import { Tooltip } from '@ui/primitives';
@@ -170,6 +171,44 @@ export function MessageList() {
     pinBottom();
     setAtBottom(true);
     setAtTop(false);
+  };
+
+  /**
+   * 跳到某条消息的顶部或底部
+   *
+   * 【为什么要走 rect 差值，而不是 offsetTop】
+   * `offsetTop` 相对的是**最近的定位祖先**，不一定是这个滚动容器；消息外面还套着
+   * 网格与列容器，一旦哪层的 position 变了，算出来的位置就会整体偏移。
+   * 两个 rect 相减得到的是"目标相对视口的位置"，与布局层次无关。
+   *
+   * 【为什么要写 pinnedTopRef】
+   * 滚动事件是异步派发的，而 `onScroll` 靠"位置是否等于我们设过的值"来区分
+   * 自己人与用户（见它的说明）。不记这一笔，这次跳转会被当成"用户往上翻了"，
+   * 当场掐断自动跟随 —— 而从底部跳回某条消息的顶部，用户多半只是想读一读。
+   */
+  const jumpToMessage = (id: MessageId, edge: 'top' | 'bottom') => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    const element = scroller.querySelector<HTMLElement>(`[data-message-id="${id}"]`);
+    if (!element) return;
+
+    const scrollerRect = scroller.getBoundingClientRect();
+    const rect = element.getBoundingClientRect();
+    const delta = edge === 'top' ? rect.top - scrollerRect.top : rect.bottom - scrollerRect.bottom;
+
+    scroller.scrollTop += delta;
+    // 读回被钳过的真实值（理由同 pinBottom）
+    pinnedTopRef.current = scroller.scrollTop;
+
+    /*
+     * 跟随意图按**落点**重新判断，而不是一律停掉
+     *
+     * 跳到顶部多半是要停下来读 → 不该再被新内容拽回底部；
+     * 但如果本来就是最后一条、跳完仍然贴着底（比如它比一屏还短），
+     * 那就该继续跟随 —— 判据与 `onScroll` 里那条完全一致。
+     */
+    const remaining = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+    stickRef.current = remaining <= STICK_THRESHOLD_PX;
   };
 
   useEffect(() => {
@@ -447,6 +486,7 @@ export function MessageList() {
               onSelectVariant={selectVariant}
               onCopy={copyToClipboard}
               onContinue={continueWriting}
+              onJumpTo={jumpToMessage}
               /*
                * 传布尔而不是把 id 整个传下去：这是原始值，其余消息的 props 不变，
                * 它们的 memo 不会被这一个按钮废掉（同 autoExpandReasoning 的理由）

@@ -1,0 +1,68 @@
+{
+  "id": "solarized-light",
+  "name": "日光",
+  "version": "1.0.0",
+  "colorScheme": "light",
+  "extends": "braid.light",
+  "description": "Solarized Light：象牙纸底色、暖白不刺眼（Emacs / Vim 的老牌配色）",
+  "tokens": {
+    "semantic": {
+      "bg": {
+        "canvas": "#FDF6E3",
+        "surface": "#EEE8D5",
+        "raised": "#FFFBF0",
+        "sunken": "#E4DCC6",
+        "overlay": "rgba(0, 43, 54, 0.35)"
+      },
+      "text": {
+        "primary": "#657B83",
+        "secondary": "#839496",
+        "tertiary": "#93A1A1",
+        "disabled": "#A9B3B0",
+        "inverse": "#FDF6E3",
+        "link": "#268BD2"
+      },
+      "border": {
+        "subtle": "#EEE8D5",
+        "default": "#DDD6C1",
+        "strong": "#CDC5AE",
+        "focus": "#268BD2"
+      },
+      "accent": {
+        "default": "#268BD2",
+        "hover": "#3A9FE0",
+        "active": "#1E74B3",
+        "subtle": "rgba(38, 139, 210, 0.12)",
+        "onAccent": "#FDF6E3"
+      },
+      "status": {
+        "info": "#268BD2",
+        "success": "#859900",
+        "warning": "#B58900",
+        "danger": "#DC322F",
+        "onStatus": "#FDF6E3"
+      },
+      "role": {
+        "userBubble": "#268BD2",
+        "userText": "#FDF6E3",
+        "assistantBubble": "#EEE8D5",
+        "assistantText": "#657B83",
+        "systemBubble": "#F7ECD2",
+        "systemText": "#B58900",
+        "toolBubble": "#E6EAE3",
+        "toolText": "#2AA198"
+      },
+      "diff": {
+        "add": "rgba(133, 153, 0, 0.14)",
+        "addText": "#859900",
+        "del": "rgba(220, 50, 47, 0.12)",
+        "delText": "#DC322F",
+        "gutter": "#EEE8D5"
+      },
+      "selection": "rgba(38, 139, 210, 0.16)",
+      "caret": "#268BD2",
+      "scrollbarThumb": "#DDD6C1",
+      "scrollbarTrack": "transparent"
+    }
+  }
+}

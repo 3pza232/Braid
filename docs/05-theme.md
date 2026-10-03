@@ -44,7 +44,12 @@
 ## 主题文件
 
 - 放**项目根 `themes/*.json`**（Vite `import.meta.glob('/themes/*.json')` 收集）：
-  当前 6 个 —— `contrast` / `neon` / `ocean` / `sakura` / `sepia` / `terminal`；
+  当前 12 个 —— 自带 6 个（`contrast` / `neon` / `ocean` / `sakura` / `sepia` / `terminal`）
+  与取自流行编辑器配色的 6 个（`tokyo-night` / `gruvbox` / `catppuccin-mocha` /
+  `catppuccin-latte` / `nord` / `solarized-light`）；
+- **深浅要配平**：`colorScheme` 与 `extends` 必须一致（深色只能接 `braid.dark`）——
+  运行时那条路径是**按 colorScheme 找基座**的，对不上会装出一个"自称浅色的深色主题"。
+  `tests/adapters/bundledThemes.test.ts` 逐份守住这条，以及 id 不重复、语义层不残缺；
 - 每个文件**必须写** `"extends": "braid.light"` 或 `"braid.dark"`，自己只放**覆盖项**；
 - 深合并在 `domain/rules/themeInheritance.ts`（纯函数，有单测）；坏文件跳过并 `console.warn`，
   不会让整个应用起不来。
@@ -53,7 +58,7 @@
 
 ### 桌面版：可拔插的主题目录
 
-打包后的应用还能从 **exe 同级的 `themes/`** 读主题（首次运行会写入 6 个示例与一份格式说明）：
+打包后的应用还能从 **exe 同级的 `themes/`** 读主题（首次运行会把这 12 个示例与一份格式说明写进去）：
 
 - 放一个 `.json` 进去、重启应用 → 设置里就能选到，不必改代码、也不必重新打包；
 - 删掉文件 → 真的没了。**有运行时目录时只听目录里的**，不会退回打包进应用的示例；
